@@ -1,0 +1,23 @@
+name: CI
+
+# Manifest sanity: the bundle is data — CI checks the YAML parses and the SOUL
+# mirror stays in sync enough to ship.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ${{ vars.NSC_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate bundle manifest
+        run: |
+          python3 - <<'PY'
+          import yaml
+          m = yaml.safe_load(open("protoagent.bundle.yaml"))
+          assert m["id"] == "qa-engineer" and m["plugins"], "manifest shape"
+          assert m["archetype"]["soul"].strip(), "archetype soul present"
+          print("manifest ok:", m["id"], "-", len(m["plugins"]), "members")
+          PY
