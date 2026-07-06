@@ -42,4 +42,4 @@ new-agent picker seeds it.
    NOT an identity that authors PRs in the managed repos), `clawpatch`
    (`npm i -g @protolabsai/protopatch`), gateway credentials.
 
-_Bundle CI validates the manifest on every push._
+_Bundle CI validates the manifest on PRs and pushes to main._
