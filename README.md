@@ -41,3 +41,5 @@ new-agent picker seeds it.
 3. Requirements on the host: `git`, `gh` (authenticated as the reviewer identity —
    NOT an identity that authors PRs in the managed repos), `clawpatch`
    (`npm i -g @protolabsai/protopatch`), gateway credentials.
+
+_Bundle CI validates the manifest on every push._
