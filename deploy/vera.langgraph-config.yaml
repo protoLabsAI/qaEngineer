@@ -1,0 +1,32 @@
+# Vera's seed config (config-as-code — copied to the live config ONCE on first
+# boot via PROTOAGENT_SEED_CONFIG; operator edits persist in the config volume).
+#
+# Headless QA reviewer (ADR 0078 Phase D, shadow stage). Secrets NEVER live here:
+# OPENAI_API_KEY / A2A_AUTH_TOKEN / GH_TOKEN / PR_REVIEWER_WEBHOOK_SECRET all
+# arrive via the stack env (Infisical). `model.api_base` is protoAgent's
+# in-container default (http://gateway:4000/v1) — not pinned here.
+
+agent:
+  name: vera
+
+plugins:
+  enabled: [workflows, github, pr-reviewer]
+
+# The verdict surface (github-plugin). Write is required to post reviews; the
+# CI-terminal + self-review guards live INSIDE the tools. gh auth = GH_TOKEN env
+# (the protoReview identity — must NOT author PRs in the managed repos).
+github:
+  write: true
+  default_repo: ""
+  repos: []
+
+# The reviewer machinery. SHADOW: every verdict posts as a COMMENT review;
+# promotion stays with the incumbent (promotion_owner false) until a per-repo
+# handover is earned by the three-way eval. `repos` is the managed allowlist —
+# the webhook/sweep scope. Operator sets the shadow picks here (config volume)
+# or via POST /api/config.
+pr_reviewer:
+  repos: []
+  shadow_mode: true
+  promotion_owner: false
+  default_repo: ""

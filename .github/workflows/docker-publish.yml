@@ -1,0 +1,57 @@
+name: Publish Docker image to GHCR
+
+# Rolling image build on every push to main: pushes
+# `ghcr.io/protolabsai/vera:latest` (what Watchtower polls) plus a pinned
+# `sha-<short>` for rollbacks. All baked members are PUBLIC repos pinned at
+# release tags in the Dockerfile — no build secrets.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: protolabsai/vera
+
+jobs:
+  build-and-push:
+    runs-on: ${{ vars.NSC_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.sha.outputs.short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

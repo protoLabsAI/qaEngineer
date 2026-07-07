@@ -43,3 +43,16 @@ new-agent picker seeds it.
    (`npm i -g @protolabsai/protopatch`), gateway credentials.
 
 _Bundle CI validates the manifest on every push._
+
+## Deploying Vera (the reference host)
+
+This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent +
+node/`clawpatch` + the bundle members baked at their manifest pins +
+`deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`. Published as
+`ghcr.io/protolabsai/vera:latest` on every main push. She runs **headless**
+(`PROTOAGENT_UI: none`): no console — the tailnet port serves the token-gated
+operator API (eval, manual dispatch) and A2A; GitHub webhooks arrive via the
+fleet's `hooks.proto-labs.ai` cloudflared path route. The compose service +
+ingress live in homelab-iac (`stacks/vera/`). Secrets (all env, Infisical):
+`OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`), `GH_TOKEN` (protoReview),
+`PR_REVIEWER_WEBHOOK_SECRET`.
