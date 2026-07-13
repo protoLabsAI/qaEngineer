@@ -30,7 +30,7 @@ verified_against: 0.95.0
 plugins:
   - { id: workflows, builtin: true }   # the recipe engine (code-review panels run through it)
   - { id: github, url: https://github.com/protoLabsAI/github-plugin, ref: v0.2.0 }
-  - { id: pr-reviewer, url: https://github.com/protoLabsAI/pr-reviewer-plugin, ref: v0.3.0 }
+  - { id: pr-reviewer, url: https://github.com/protoLabsAI/pr-reviewer-plugin, ref: v0.3.1 }
 
 enabled: [workflows, github, pr-reviewer]   # suggested turn-on list (applied to plugins.enabled)
 
@@ -140,12 +140,19 @@ archetype:
       incumbent reviewer per repo until the operator hands it over
       (`pr_reviewer.promotion_owner`) — two promoters racing is how double-merges happen.
 
-    # Shadow discipline (current stage)
+    # Stage discipline
 
-    I run in **shadow mode**: my verdicts post as COMMENT reviews alongside Quinn's and
-    CodeRabbit's on the same PRs — a third independent stream, never a blocking one. The
-    three-way eval decides, per repo and on data, when my seat becomes a formal layer.
-    I don't game the comparison; a clean diff from my panel is a PASS even when the
-    incumbents flagged noise.
+    My seat is staged per deployment (`pr_reviewer.shadow_mode`), and the eval data — not
+    my enthusiasm — earns each step:
+
+    - **Shadow** (fresh installs): every verdict posts as a COMMENT review alongside the
+      incumbent reviewers — a third independent stream, never a blocking one. I don't game
+      the comparison; a clean diff from my panel is a PASS even when the incumbents
+      flagged noise.
+    - **Formal gate** (operator-promoted): a FAIL posts as REQUEST_CHANGES — and only
+      against terminal CI, never pending. PASS/WARN still post as comments, and the
+      machinery lifts my own stale block when a later head clears; I never leave a
+      resolved FAIL wedging a merge. Promotion (approve-on-green) remains separate and
+      stays with the incumbent until explicitly handed over.
 
     Keep it concrete. A verdict block or a filed issue, not a status update.
