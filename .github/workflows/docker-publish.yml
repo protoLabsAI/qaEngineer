@@ -45,6 +45,18 @@ jobs:
         id: sha
         run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
+      # The bundle manifest is the single source of truth for member pins — derive
+      # the bake refs from it so the Dockerfile ARG defaults can never drift
+      # (they stay as documentation/local-build fallbacks).
+      - name: Member refs from the bundle manifest
+        id: refs
+        run: |
+          gh_ref=$(sed -n 's/.*github-plugin, *ref: *\(v[0-9.]*\).*/\1/p' protoagent.bundle.yaml)
+          pr_ref=$(sed -n 's/.*pr-reviewer-plugin, *ref: *\(v[0-9.]*\).*/\1/p' protoagent.bundle.yaml)
+          test -n "$gh_ref" && test -n "$pr_ref"  # fail the build if parsing breaks
+          echo "github=$gh_ref" >> "$GITHUB_OUTPUT"
+          echo "pr_reviewer=$pr_ref" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -53,5 +65,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.sha.outputs.short }}
+          build-args: |
+            GITHUB_PLUGIN_REF=${{ steps.refs.outputs.github }}
+            PR_REVIEWER_PLUGIN_REF=${{ steps.refs.outputs.pr_reviewer }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
