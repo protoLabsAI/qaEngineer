@@ -5,7 +5,11 @@
 # compose): no console — the tailnet port serves only the token-gated operator
 # API (eval, manual dispatch) and A2A; GitHub webhooks arrive via cloudflared at
 # hooks.proto-labs.ai path-routed to /plugins/pr-reviewer/webhook (HMAC-authed).
-FROM ghcr.io/protolabsai/protoagent:latest
+# Base is PINNED (not :latest) so a plugin-pin bump can't silently drag the
+# protoAgent core forward on the same image roll — core and member bumps are
+# decoupled. Bump this deliberately (and re-verify), keeping it in step with the
+# manifest's `verified_against`. Tag format is bare semver (no `v` prefix).
+FROM ghcr.io/protolabsai/protoagent:0.104.5
 
 USER root
 

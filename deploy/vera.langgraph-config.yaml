@@ -9,6 +9,30 @@
 agent:
   name: vera
 
+# A2A agent card identity (protoAgent #570): `name` comes from AGENT_NAME (set in
+# the compose), but `description` + `skills` are config-driven here — without them
+# the card falls back to the stock template ("protoAgent template… replace this",
+# a placeholder `chat` skill). pr-reviewer ships no `register_a2a_skill`, so we
+# declare Vera's dispatchable capability ourselves. Skill *behaviour* lives in
+# SOUL.md (already covers ad-hoc PR review); this only advertises it to callers.
+a2a:
+  description: >-
+    Vera — the protoLabs fleet's QA engineer. Reviews pull requests through an
+    adversarial panel (four LLM finder angles + the protoPatch structural engine)
+    with independent verification, and returns formal PASS/WARN/FAIL verdicts.
+    Runs in shadow mode alongside the incumbent reviewers; never reviews her own work.
+  skills:
+    - id: pr_review
+      name: Review a pull request
+      description: >-
+        Review a GitHub PR through the adversarial panel and the protoPatch
+        structural engine, verify the findings, and return a formal
+        PASS / WARN / FAIL verdict with the findings that drove it.
+      tags: [code-review, pull-request, qa, verdict]
+      examples:
+        - "review https://github.com/protoLabsAI/protoAgent/pull/64"
+        - "what's your verdict on PR #42 in protoLabsAI/qaEngineer?"
+
 plugins:
   enabled: [workflows, github, pr-reviewer]
 

@@ -46,10 +46,12 @@ _Bundle CI validates the manifest on every push._
 
 ## Deploying Vera (the reference host)
 
-This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent +
-node/`clawpatch` + the bundle members baked at their manifest pins +
-`deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`. Published as
-`ghcr.io/protolabsai/vera:latest` on every main push. She runs **headless**
+This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent
+(**pinned base** — `protoagent:0.104.5`, in step with the manifest's
+`verified_against`; bump deliberately so a member-pin bump can't drag the core
+forward on the same roll) + node/`clawpatch` + the bundle members baked at their
+manifest pins + `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
+Published as `ghcr.io/protolabsai/vera:latest` on every main push. She runs **headless**
 (`PROTOAGENT_UI: none`): no console — the tailnet port serves the token-gated
 operator API (eval, manual dispatch) and A2A; GitHub webhooks arrive via the
 fleet's `hooks.proto-labs.ai` cloudflared path route. The compose service +
