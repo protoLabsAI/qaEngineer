@@ -1,7 +1,8 @@
 # Vera's seed config (config-as-code — copied to the live config ONCE on first
 # boot via PROTOAGENT_SEED_CONFIG; operator edits persist in the config volume).
 #
-# Headless QA reviewer (ADR 0078 Phase D, shadow stage). Secrets NEVER live here:
+# Headless QA reviewer (ADR 0078 Phase D, PROMOTED stage — see pr_reviewer below;
+# shadow remains the shipped default for fresh installs). Secrets NEVER live here:
 # OPENAI_API_KEY / A2A_AUTH_TOKEN / GH_TOKEN / PR_REVIEWER_WEBHOOK_SECRET all
 # arrive via the stack env (Infisical). `model.api_base` is protoAgent's
 # in-container default (http://gateway:4000/v1) — not pinned here.
@@ -20,7 +21,8 @@ a2a:
     Vera — the protoLabs fleet's QA engineer. Reviews pull requests through an
     adversarial panel (four LLM finder angles + the protoPatch structural engine)
     with independent verification, and returns formal PASS/WARN/FAIL verdicts.
-    Runs in shadow mode alongside the incumbent reviewers; never reviews her own work.
+    A promoted formal gate on her managed repos — a FAIL blocks against terminal
+    CI, and approve-on-green promotion is hers; never reviews her own work.
   skills:
     - id: pr_review
       name: Review a pull request
@@ -44,13 +46,16 @@ github:
   default_repo: ""
   repos: []
 
-# The reviewer machinery. SHADOW: every verdict posts as a COMMENT review;
-# promotion stays with the incumbent (promotion_owner false) until a per-repo
-# handover is earned by the three-way eval. `repos` is the managed allowlist —
-# the webhook/sweep scope. Operator sets the shadow picks here (config volume)
-# or via POST /api/config.
+# The reviewer machinery. PROMOTED (earned via the three-way eval): a FAIL posts
+# as REQUEST_CHANGES against terminal CI, and approve-on-green promotion is hers
+# — she is the sole promoter on these repos, so nothing else may promote them
+# (two promoters racing is how double-merges happen). Shadow stays the shipped
+# default for fresh installs (see protoagent.bundle.yaml); this is Vera's OWN
+# deployment. `repos` is the managed allowlist — the webhook/sweep scope — and is
+# operator state: it lives in the live config volume, NOT here. Set it there or
+# via POST /api/config.
 pr_reviewer:
   repos: []
-  shadow_mode: true
-  promotion_owner: false
+  shadow_mode: false
+  promotion_owner: true
   default_repo: ""
