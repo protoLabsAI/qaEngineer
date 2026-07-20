@@ -14,7 +14,7 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
 | [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.2.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
-| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.2.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, approve-on-green sweep, telemetry + eval, protoPatch structural finder |
+| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.5.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, approve-on-green sweep, telemetry + eval, protoPatch structural finder, existing-thread awareness |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification,
 80% bar, self-restriction), also inlined in the manifest's `archetype.soul` so the

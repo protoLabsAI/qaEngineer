@@ -27,7 +27,7 @@ ARG GITHUB_PLUGIN_REF=v0.2.0
 RUN git clone --depth 1 --branch "${GITHUB_PLUGIN_REF}" \
       https://github.com/protoLabsAI/github-plugin.git /opt/protoagent/plugins/github \
     && rm -rf /opt/protoagent/plugins/github/.git
-ARG PR_REVIEWER_PLUGIN_REF=v0.3.1
+ARG PR_REVIEWER_PLUGIN_REF=v0.5.0
 RUN git clone --depth 1 --branch "${PR_REVIEWER_PLUGIN_REF}" \
       https://github.com/protoLabsAI/pr-reviewer-plugin.git /opt/protoagent/plugins/pr-reviewer \
     && rm -rf /opt/protoagent/plugins/pr-reviewer/.git
