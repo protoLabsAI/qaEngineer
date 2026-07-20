@@ -21,3 +21,21 @@ jobs:
           assert m["archetype"]["soul"].strip(), "archetype soul present"
           print("manifest ok:", m["id"], "-", len(m["plugins"]), "members")
           PY
+      - name: Seed carries Vera's A2A card identity
+        # Static half of the seed-vs-live drift guard (scripts/check_card_drift.py
+        # is the runtime half, run from the ava fleet cron since the card is
+        # tailnet-only). Catches a seed that regresses to the stock template
+        # before it ever bakes into an image.
+        run: |
+          python3 - <<'PY'
+          import yaml
+          TEMPLATE = ("protoagent template", "replace this description", "replace with your agent")
+          c = yaml.safe_load(open("deploy/vera.langgraph-config.yaml")) or {}
+          a2a = c.get("a2a") or {}
+          desc = (a2a.get("description") or "").strip()
+          assert desc, "seed a2a.description is empty — card would fall back to the template"
+          assert not any(t in desc.lower() for t in TEMPLATE), "seed a2a.description still reads as the stock template"
+          skills = {s.get("id") for s in (a2a.get("skills") or [])}
+          assert "pr_review" in skills, f"seed a2a.skills missing pr_review (has {sorted(skills)})"
+          print("seed a2a identity ok — description set, skills:", sorted(skills))
+          PY

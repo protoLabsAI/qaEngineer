@@ -42,7 +42,13 @@ new-agent picker seeds it.
    NOT an identity that authors PRs in the managed repos), `clawpatch`
    (`npm i -g @protolabsai/protopatch`), gateway credentials.
 
-_Bundle CI validates the manifest on every push._
+_Bundle CI validates the manifest on every push_ — and asserts the seed carries
+Vera's A2A card identity (non-template description + the `pr_review` skill), so a
+seed that regresses to the stock template fails before it bakes. Because the
+config volume is **seed-once**, that static check can't see a *running* instance
+whose live config drifted from the seed; `scripts/check_card_drift.py` is the
+runtime half — point it at the (tailnet-only) card from the ava fleet cron:
+`python3 scripts/check_card_drift.py` (exit 1 on drift)._
 
 ## Deploying Vera (the reference host)
 
