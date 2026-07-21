@@ -9,7 +9,7 @@
 # protoAgent core forward on the same image roll — core and member bumps are
 # decoupled. Bump this deliberately (and re-verify), keeping it in step with the
 # manifest's `verified_against`. Tag format is bare semver (no `v` prefix).
-FROM ghcr.io/protolabsai/protoagent:0.104.5
+FROM ghcr.io/protolabsai/protoagent:0.106.0
 
 USER root
 
@@ -27,7 +27,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Bake the bundle members at their RELEASE TAGS (both public — no build secrets).
 # The tags mirror protoagent.bundle.yaml's pins; bump both together (the manifest
 # is the source of truth, this bake is its image form).
-ARG GITHUB_PLUGIN_REF=v0.2.0
+ARG GITHUB_PLUGIN_REF=v0.3.0
 RUN git clone --depth 1 --branch "${GITHUB_PLUGIN_REF}" \
       https://github.com/protoLabsAI/github-plugin.git /opt/protoagent/plugins/github \
     && rm -rf /opt/protoagent/plugins/github/.git
