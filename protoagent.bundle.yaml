@@ -25,7 +25,7 @@ description: >-
   own work; never posts a blocking verdict against pending CI.
 
 # The core version this pin set was last verified against (ADR 0049 rule 2).
-verified_against: 0.104.5
+verified_against: 0.106.0
 
 plugins:
   - { id: workflows, builtin: true }   # the recipe engine (code-review panels run through it)
