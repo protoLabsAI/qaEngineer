@@ -53,7 +53,7 @@ runtime half — point it at the (tailnet-only) card from the ava fleet cron:
 ## Deploying Vera (the reference host)
 
 This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent
-(**pinned base** — `protoagent:0.104.5`, in step with the manifest's
+(**pinned base** — `protoagent:0.106.0`, in step with the manifest's
 `verified_against`; bump deliberately so a member-pin bump can't drag the core
 forward on the same roll) + node/`clawpatch` + the bundle members baked at their
 manifest pins + `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
