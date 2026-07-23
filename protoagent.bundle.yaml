@@ -30,7 +30,7 @@ verified_against: 0.106.0
 plugins:
   - { id: workflows, builtin: true }   # the recipe engine (code-review panels run through it)
   - { id: github, url: https://github.com/protoLabsAI/github-plugin, ref: v0.3.0 }
-  - { id: pr-reviewer, url: https://github.com/protoLabsAI/pr-reviewer-plugin, ref: v0.9.0 }
+  - { id: pr-reviewer, url: https://github.com/protoLabsAI/pr-reviewer-plugin, ref: v0.12.0 }
 
 enabled: [workflows, github, pr-reviewer]   # suggested turn-on list (applied to plugins.enabled)
 
