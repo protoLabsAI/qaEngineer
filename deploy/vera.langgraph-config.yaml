@@ -35,6 +35,20 @@ a2a:
         - "review https://github.com/protoLabsAI/protoAgent/pull/64"
         - "what's your verdict on PR #42 in protoLabsAI/qaEngineer?"
 
+# Model — pinned to the CLOUD lane 2026-07-23 while the local `smart` backend
+# (:8041) is pulled. Model settings are normally HOST-scoped (ADR 0047) and this
+# agent layer deliberately outranks the box default, because the default
+# `protolabs/reasoning` is a gateway ALIAS to `protolabs/smart` — leaving it unset
+# would take the review panel down with the backend it points at.
+#
+# protolabs/cloud -> deepseek-v4-pro: 1M context, so the panel's ~37k-token finder
+# prompts fit with room to spare (the previous local lane capped at 32k total,
+# which is what exhausted the panel on large diffs).
+#
+# Revert to the host default (delete this block) once smart is back.
+model:
+  name: protolabs/cloud
+
 plugins:
   enabled: [workflows, github, pr-reviewer]
 
