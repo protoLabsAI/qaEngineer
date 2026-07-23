@@ -9,7 +9,7 @@
 # protoAgent core forward on the same image roll — core and member bumps are
 # decoupled. Bump this deliberately (and re-verify), keeping it in step with the
 # manifest's `verified_against`. Tag format is bare semver (no `v` prefix).
-FROM ghcr.io/protolabsai/protoagent:0.106.0
+FROM ghcr.io/protolabsai/protoagent:0.108.0
 
 USER root
 
@@ -31,7 +31,7 @@ ARG GITHUB_PLUGIN_REF=v0.3.0
 RUN git clone --depth 1 --branch "${GITHUB_PLUGIN_REF}" \
       https://github.com/protoLabsAI/github-plugin.git /opt/protoagent/plugins/github \
     && rm -rf /opt/protoagent/plugins/github/.git
-ARG PR_REVIEWER_PLUGIN_REF=v0.14.1
+ARG PR_REVIEWER_PLUGIN_REF=v0.16.0
 RUN git clone --depth 1 --branch "${PR_REVIEWER_PLUGIN_REF}" \
       https://github.com/protoLabsAI/pr-reviewer-plugin.git /opt/protoagent/plugins/pr-reviewer \
     && rm -rf /opt/protoagent/plugins/pr-reviewer/.git
