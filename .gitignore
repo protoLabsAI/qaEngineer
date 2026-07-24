@@ -1,6 +1,5 @@
 .DS_Store
 .proto/
 
-# Hand-grounded review-findings dataset — local until it's big enough to move to
-# protolabs (see protoLab tracking issue). Contains no secrets, just labels + claims.
-data/review-eval/
+# Review-eval ground truth is now COMMITTED (exported for the model A/B — qaEngineer#20,
+# protoLab#26). Labels + claims about our own PRs, no secrets.
