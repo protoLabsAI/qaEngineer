@@ -21,6 +21,24 @@ jobs:
           assert m["archetype"]["soul"].strip(), "archetype soul present"
           print("manifest ok:", m["id"], "-", len(m["plugins"]), "members")
           PY
+      - name: README pins match bundle manifest and Dockerfile
+        # Prevents the member-table and base-image prose from drifting out of sync
+        # with the canonical pins in protoagent.bundle.yaml and the Dockerfile FROM line.
+        run: |
+          python3 - <<'PY'
+          import re, yaml
+          m = yaml.safe_load(open("protoagent.bundle.yaml"))
+          plugins = {p["id"]: p for p in m["plugins"] if not p.get("builtin")}
+          pr_ref = plugins["pr-reviewer"]["ref"]
+          base = m["verified_against"]
+          readme = open("README.md").read()
+          assert pr_ref in readme, f"README missing pr-reviewer-plugin {pr_ref} (bundle says {pr_ref})"
+          assert base in readme, f"README missing protoagent:{base} base (manifest verified_against {base})"
+          # Dockerfile FROM must match verified_against
+          df = open("Dockerfile").read()
+          assert f"protoagent:{base}" in df, f"Dockerfile FROM not on protoagent:{base}"
+          print(f"pins ok — pr-reviewer {pr_ref}, base {base}")
+          PY
       - name: Seed carries Vera's A2A card identity
         # Static half of the seed-vs-live drift guard (scripts/check_card_drift.py
         # is the runtime half, run from the ava fleet cron since the card is
