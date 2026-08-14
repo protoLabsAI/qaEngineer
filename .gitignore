@@ -3,3 +3,7 @@
 
 # Review-eval ground truth is now COMMITTED (exported for the model A/B — qaEngineer#20,
 # protoLab#26). Labels + claims about our own PRs, no secrets.
+
+# Python bytecode — a stray .pyc rode in on #34 from a local import test.
+__pycache__/
+*.py[cod]
