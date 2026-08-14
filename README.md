@@ -15,7 +15,7 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
 | [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.3.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
-| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.17.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, on-demand summon, telemetry + eval |
+| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.24.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, on-demand summon, telemetry + eval |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification, 80% bar,
 self-restriction), also inlined in the manifest's `archetype.soul` so the new-agent picker
@@ -164,7 +164,7 @@ from the payload):
 ## Deploying Vera (the reference host)
 
 This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (**pinned
-base** — `protoagent:0.108.0`, in step with the manifest's `verified_against`; bump
+base** — `protoagent:0.132.0`, in step with the manifest's `verified_against`; bump
 deliberately so a member-pin bump can't drag the core forward on the same roll) +
 node/`clawpatch` + the bundle members baked at their manifest pins +
 `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
