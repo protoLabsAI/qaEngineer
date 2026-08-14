@@ -71,11 +71,13 @@ def main() -> int:
 
     problems: list[str] = []
 
-    # The headline metric (pr-reviewer-plugin#58). Absent on an older plugin — fall back
-    # to the inbox, which is the only other place the number exists.
+    # The headline metric (pr-reviewer-plugin#67). Absent on a plugin older than the
+    # version that added it — fall back to the inbox, the only other place the number
+    # exists. This stays a soft degrade on purpose: a health check that hard-fails on an
+    # older plugin turns a routine version skew into a page.
     unreviewed = (report.get("unreviewed_prs") or {}).get("count")
     if unreviewed is None:
-        print("note: eval report has no `unreviewed_prs` (plugin predates #58) — using inbox depth only")
+        print("note: eval report has no `unreviewed_prs` (plugin predates #67) — using inbox depth only")
     elif unreviewed > args.max_unreviewed:
         prs = ", ".join((report.get("unreviewed_prs") or {}).get("prs", [])[:5])
         problems.append(f"{unreviewed} PR(s) exhausted with no verdict (> {args.max_unreviewed}): {prs}")
