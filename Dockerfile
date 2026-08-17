@@ -9,7 +9,7 @@
 # protoAgent core forward on the same image roll — core and member bumps are
 # decoupled. Bump this deliberately (and re-verify), keeping it in step with the
 # manifest's `verified_against`. Tag format is bare semver (no `v` prefix).
-FROM ghcr.io/protolabsai/protoagent:0.132.0
+FROM ghcr.io/protolabsai/protoagent:0.137.1
 
 USER root
 
