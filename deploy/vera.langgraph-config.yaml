@@ -51,9 +51,17 @@ github:
 # — she is the sole promoter on these repos, so nothing else may promote them
 # (two promoters racing is how double-merges happen). Shadow stays the shipped
 # default for fresh installs (see protoagent.bundle.yaml); this is Vera's OWN
-# deployment. `repos` is the managed allowlist — the webhook/sweep scope — and is
-# operator state: it lives in the live config volume, NOT here. Set it there or
-# via POST /api/config.
+# deployment.
+#
+# `repos` EMPTY = "every repo the GitHub App installation covers" (pr-reviewer
+# >= v0.27.0). Installing the App is already an explicit, revocable, audited
+# grant; a second list here only ever drifted from it, and the drift was silent —
+# the repo delivered webhooks and got nothing reviewed. GitHub is the gate now:
+# to bring a repo under review, install the App on it; to remove it, uninstall.
+#
+# Setting a non-empty list still works and NARROWS to it (useful for a staged
+# rollout). It is operator state living in the live config volume, not here — set
+# it via POST /api/config, since this file only seeds first boot.
 pr_reviewer:
   repos: []
   shadow_mode: false
