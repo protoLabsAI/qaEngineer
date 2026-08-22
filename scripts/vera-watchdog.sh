@@ -39,10 +39,29 @@ REPO="${VERA_WATCHDOG_REPO:-$HOME/dev/qaEngineer}"
 BIN="$HOME/.local/bin"
 MODE="${1:-}"; shift || true   # remaining args pass through to the underlying check
 
+# The alert path must not depend on a credential that can silently expire. On
+# 2026-08-21 ava's `infisical login` session had lapsed and two health runs fell through
+# to the no-secrets branch: the checks ran, passed, and would have alerted to NOTHING if
+# they had failed — the guard disarmed with no signal, which is the exact failure class
+# these watchdogs exist to catch, one level up. So: env first (infisical run, when a
+# session is good), then a local 0600 file that no session can invalidate.
+#
+#     install -d -m 700 ~/.config/vera
+#     printf 'DISCORD_WEBHOOK_ALERTS=%s\n' "$(infisical secrets get DISCORD_WEBHOOK_ALERTS --plain ...)" \
+#       > ~/.config/vera/alerts.env && chmod 600 ~/.config/vera/alerts.env
+#
+# Regenerate it if the webhook is ever rotated — this is a cached copy, not the source.
+ALERT_ENV="${VERA_ALERT_ENV:-$HOME/.config/vera/alerts.env}"
+
 alert() {  # alert <title> <body>
     local hook="${DISCORD_WEBHOOK_ALERTS:-}"
+    if [ -z "$hook" ] && [ -r "$ALERT_ENV" ]; then
+        # shellcheck disable=SC1090
+        . "$ALERT_ENV"
+        hook="${DISCORD_WEBHOOK_ALERTS:-}"
+    fi
     if [ -z "$hook" ]; then
-        echo "vera-watchdog: DISCORD_WEBHOOK_ALERTS unset — run via infisical; NOT alerted" >&2
+        echo "vera-watchdog: no DISCORD_WEBHOOK_ALERTS (env or $ALERT_ENV) — NOT alerted" >&2
         return
     fi
     local body
