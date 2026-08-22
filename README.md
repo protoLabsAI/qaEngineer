@@ -14,7 +14,7 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 | Member | Pin | Role |
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
-| [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.3.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
+| [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.4.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
 | [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.35.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, on-demand summon, telemetry + eval |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification, 80% bar,
@@ -84,7 +84,27 @@ plus prior-round context. In practice that's **~37k tokens per finder**.
 - **No aggressive TPM cap.** A free tier at 12,000 tokens/minute rejects a single finder
   outright.
 - Routed through a gateway alias, so swapping models is a gateway edit rather than a code
-  change. Model settings are host-scoped (ADR 0047).
+  change. Model settings are host-scoped (ADR 0047) — **or** a native subscription lane
+  (see below), which is not a gateway edit at all.
+
+**The reference host's lane (since 2026-08-21):** `model.provider: anthropic-oauth` +
+`model.name: claude-sonnet-5`, with `routing.fallback_models: ["protolabs/smart"]` behind
+it. Native OAuth **bypasses the gateway entirely** (ADR 0097) — the fallback alias is
+reachable only because protoAgent#2571 lets a namespaced slot name opt out of the native
+provider, so `model.api_base` + a gateway key must stay set even though the primary never
+uses them. Set `model.name` and `model.provider` in the SAME config POST: they are one
+decision (protoAgent#2623), and a native provider paired with a `protolabs/*` name is
+rejected on every call.
+
+**A fallback is SILENT.** protoAgent wires langchain's `ModelFallbackMiddleware` raw, and
+that middleware swallows the primary's exception with no log, no counter and no event —
+verified against core 0.144.0, filed as protoAgent#2956. So a dead subscription doesn't
+break the review; it quietly changes which model writes the verdict. That is what
+`scripts/check_model_fallback.py` exists to catch, by inference from gateway metrics:
+protoAgent-UA traffic arriving at the gateway from Vera's container *is* a fallback,
+because her primary never goes there. If #2956 lands a `model.fallback` lifecycle event,
+delete that script and subscribe to the event — it would be ground truth where this is
+an inference.
 
 **Reviews are not cheap.** One structural review is nine LLM steps and 5–9 minutes of
 wall clock. On a hosted frontier model that's roughly $0.12–0.15 each; on local inference
@@ -164,7 +184,7 @@ from the payload):
 ## Deploying Vera (the reference host)
 
 This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (**pinned
-base** — `protoagent:0.137.1`, in step with the manifest's `verified_against`; bump
+base** — `protoagent:0.144.0`, in step with the manifest's `verified_against`; bump
 deliberately so a member-pin bump can't drag the core forward on the same roll) +
 node/`clawpatch` + the bundle members baked at their manifest pins +
 `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
@@ -190,6 +210,27 @@ to the stock template fails before it bakes. Because the config volume is seed-o
 static check can't see a *running* instance whose live config drifted;
 `scripts/check_card_drift.py` is the runtime half — point it at the (tailnet-only) card
 from the ava fleet cron: `python3 scripts/check_card_drift.py` (exit 1 on drift).
+
+### The watchdogs
+
+Four checks, all run from the ava fleet cron through `scripts/vera-watchdog.sh`, which is
+the piece that makes a failure LOUD (a Discord `#alerts` post, with exit 1 = verdict and
+exit 2 = unreachable kept as distinct alarms). Every one of them exists because Vera fails
+*quietly* — a starved panel, a drifted card, a swapped model underneath a verdict.
+
+| Mode | Check | Asks |
+|---|---|---|
+| `health` | `check_review_health.py` | is the gate still producing verdicts? (growth in unreviewed/exhausted, completion rate) |
+| `drift` | `check_card_drift.py` | does the live card still match the seed? |
+| `fallback` | `check_model_fallback.py` | did she silently answer from her fallback model? (gateway-metrics inference — protoAgent#2956) |
+| `oauth` | `check_oauth_health.py` | is the subscription credential still signed in, refreshable, and coherent with `model.name`? |
+
+The wrapper runs **installed copies** in `~/.local/bin`, not `scripts/*.py` — this repo is
+also the deploy source, so a branch switch would silently disarm a guard that lived inside
+it. Re-`install` them after changing a script (there is no auto-update) — the install lines
+are in the wrapper's header. It reads `DISCORD_WEBHOOK_ALERTS` from `infisical run`, so an
+expired Infisical session downgrades every alarm to a log line nobody reads; that is worth
+checking whenever the alerts channel goes quiet for a suspiciously long time.
 
 ## Other orgs
 
