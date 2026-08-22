@@ -15,6 +15,7 @@
 # a feature branch for part of 2026-08-17 during the 0.137.1 bump. A watchdog must not
 # live inside the thing it watches. Refresh these copies when the repo version changes:
 #
+#     install -m 644 ~/dev/qaEngineer/scripts/vera_api.py             ~/.local/bin/vera_api.py
 #     install -m 755 ~/dev/qaEngineer/scripts/check_review_health.py   ~/.local/bin/vera-review-health.py
 #     install -m 755 ~/dev/qaEngineer/scripts/check_card_drift.py      ~/.local/bin/vera-card-drift.py
 #     install -m 755 ~/dev/qaEngineer/scripts/check_model_fallback.py  ~/.local/bin/vera-model-fallback.py

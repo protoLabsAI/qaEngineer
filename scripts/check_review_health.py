@@ -36,9 +36,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
+
+from vera_api import operator_api_get
 
 # New PRs that exhausted and have no verdict SINCE THE LAST RUN. Not zero because the
 # backfill sweep recovers some on a delay — protoAgent#2546 sat unreviewed for ~35min
@@ -53,17 +54,6 @@ MAX_INBOX_GROWTH = 5
 MIN_COMPLETION_RATE = 0.80
 
 DEFAULT_STATE = Path.home() / ".cache" / "vera-review-health.json"
-
-
-def _api(container: str, path: str) -> dict:
-    """Read a token-gated operator-API endpoint from inside the container."""
-    cmd = f'curl -s -m 25 -H "Authorization: Bearer $A2A_AUTH_TOKEN" localhost:7870{path}'
-    out = subprocess.run(
-        ["docker", "exec", container, "sh", "-c", cmd], capture_output=True, text=True, timeout=60
-    )
-    if out.returncode != 0:
-        raise RuntimeError(f"docker exec failed for {path}: {out.stderr.strip()[:200]}")
-    return json.loads(out.stdout)
 
 
 def _load_state(path: Path) -> dict:
@@ -110,8 +100,8 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        report = _api(args.container, "/api/plugins/pr-reviewer/eval")
-        inbox = _api(args.container, "/api/inbox")
+        report = operator_api_get(args.container, "/api/plugins/pr-reviewer/eval")
+        inbox = operator_api_get(args.container, "/api/inbox")
     except Exception as exc:  # noqa: BLE001 — any failure here is operational, not a verdict
         print(f"UNREACHABLE: {exc}", file=sys.stderr)
         return 2

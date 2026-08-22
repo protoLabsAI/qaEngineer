@@ -228,7 +228,11 @@ exit 2 = unreachable kept as distinct alarms). Every one of them exists because 
 The wrapper runs **installed copies** in `~/.local/bin`, not `scripts/*.py` — this repo is
 also the deploy source, so a branch switch would silently disarm a guard that lived inside
 it. Re-`install` them after changing a script (there is no auto-update) — the install lines
-are in the wrapper's header. It reads `DISCORD_WEBHOOK_ALERTS` from `infisical run`, so an
+are in the wrapper's header. That includes **`scripts/vera_api.py`**, the shared
+operator-API helper: Python puts a script's own directory on `sys.path[0]`, so a flat
+module installed alongside imports cleanly — and a check installed *without* it dies on
+ImportError. `python3 -m unittest discover tests` covers the attribution and verdict rules
+(CI runs it). It reads `DISCORD_WEBHOOK_ALERTS` from `infisical run`, so an
 expired Infisical session downgrades every alarm to a log line nobody reads; that is worth
 checking whenever the alerts channel goes quiet for a suspiciously long time.
 

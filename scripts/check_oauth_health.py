@@ -44,24 +44,14 @@ reach the agent (operational, NOT a verdict).
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 import sys
 import time
+
+from vera_api import operator_api_get
 
 # Native-OAuth providers (ADR 0097). A gateway-backed agent has no credential of its own
 # to check — this whole script is a no-op for one, and says so rather than passing mutely.
 NATIVE_PROVIDERS = {"anthropic-oauth", "openai-codex"}
-
-
-def _api(container: str, path: str) -> dict:
-    cmd = f'curl -s -m 25 -H "Authorization: Bearer $A2A_AUTH_TOKEN" localhost:7870{path}'
-    out = subprocess.run(
-        ["docker", "exec", container, "sh", "-c", cmd], capture_output=True, text=True, timeout=60
-    )
-    if out.returncode != 0:
-        raise RuntimeError(f"docker exec failed for {path}: {out.stderr.strip()[:200]}")
-    return json.loads(out.stdout)
 
 
 def evaluate(model_cfg: dict, providers: list[dict]) -> tuple[int, list[str]]:
@@ -119,8 +109,8 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        model_cfg = _api(args.container, "/api/config").get("config", {}).get("model", {})
-        providers = _api(args.container, "/api/config/oauth-status").get("providers", [])
+        model_cfg = operator_api_get(args.container, "/api/config").get("config", {}).get("model", {})
+        providers = operator_api_get(args.container, "/api/config/oauth-status").get("providers", [])
     except Exception as exc:  # noqa: BLE001 — operational, exit 2
         print(f"UNREACHABLE: {exc}")
         return 2
