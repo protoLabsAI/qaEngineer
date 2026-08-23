@@ -5,9 +5,16 @@
 SILENTLY. protoAgent wires langchain's `ModelFallbackMiddleware` raw (graph/agent.py),
 and that middleware swallows the primary's exception with no log, no counter, and no
 event — a successful fallback is byte-for-byte indistinguishable from a normal turn.
-Verified against core 0.144.0; filed upstream as protoAgent#2956. If that issue lands a
-`model.fallback` lifecycle event, DELETE this script and subscribe to the event instead:
-this is an inference, and the event would be ground truth.
+Filed upstream as protoAgent#2956 and **FIXED in core 0.145.0** — which this repo now
+pins: `ObservableModelFallbackMiddleware` logs a WARNING and publishes a `model.fallback`
+bus event (ADR 0039). So this script is already living on borrowed time, deliberately:
+
+RETIRE IT once the RUNNING instance is on 0.145.0 *and* the event has been seen firing.
+Pinning a version is not the same as running it — Vera rolls on watchtower after this
+merges, and until then she is on 0.137.1 with no event at all. Deleting the inference
+before its replacement is observed working would leave the silent-degrade window
+uncovered by both, which is the one outcome worth avoiding. Once the event is confirmed,
+delete this file: the event is ground truth where this is an inference from traffic.
 
 THE INFERENCE. Since 2026-08-21 Vera's primary is a NATIVE OAUTH provider
 (`model.provider: anthropic-oauth`, claude-sonnet-5), which per ADR 0097 bypasses the
@@ -206,7 +213,21 @@ def main() -> int:
                 verdict = 1
 
     if not args.no_save:
-        _save_state(args.state, new_state)
+        try:
+            _save_state(args.state, new_state)
+        except OSError as exc:
+            # Persisting the baseline is bookkeeping; the verdict is the product. A
+            # full disk must never turn a REAL fallback into an "unreachable" alarm —
+            # that would relabel a silent degrade as an outage and send the operator
+            # looking in the wrong place. So a save failure downgrades to exit 2 only
+            # when there was nothing else to report; a verdict of 1 survives it and
+            # says so. (Cost of not saving: the next run re-alarms off a stale
+            # baseline. A duplicate alert is strictly better than a missed one.)
+            print(f"WARNING: could not persist the baseline to {args.state}: {exc}")
+            if verdict == 0:
+                print("No fallback to report, but the next run cannot alarm on growth — treating as operational.")
+                return 2
+            print("Keeping the FALLBACK verdict; the next run may re-alarm from a stale baseline.")
     return verdict
 
 

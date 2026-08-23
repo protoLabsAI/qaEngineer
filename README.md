@@ -98,13 +98,21 @@ rejected on every call.
 
 **A fallback is SILENT.** protoAgent wires langchain's `ModelFallbackMiddleware` raw, and
 that middleware swallows the primary's exception with no log, no counter and no event —
-verified against core 0.144.0 — FIXED in 0.145.0 (#2956), filed as protoAgent#2956. So a dead subscription doesn't
-break the review; it quietly changes which model writes the verdict. That is what
+found on core 0.144.0 and filed as protoAgent#2956. So a dead subscription doesn't break
+the review; it quietly changes which model writes the verdict. That is what
 `scripts/check_model_fallback.py` exists to catch, by inference from gateway metrics:
 protoAgent-UA traffic arriving at the gateway from Vera's container *is* a fallback,
-because her primary never goes there. If #2956 lands a `model.fallback` lifecycle event,
-delete that script and subscribe to the event — it would be ground truth where this is
-an inference.
+because her primary never goes there.
+
+**#2956 is FIXED in core 0.145.0**, which the pins above now carry:
+`ObservableModelFallbackMiddleware` logs a WARNING and publishes a `model.fallback` bus
+event (ADR 0039). The inference script is therefore scheduled for deletion — but not
+yet, and the distinction matters: **pinning a version is not running it.** Vera rolls on
+watchtower after a merge, so between the pin landing and the roll completing she is on
+the old core with no event at all. Retire the script once the running instance reports
+0.145.0 *and* the event has been seen firing; deleting the inference before its
+replacement is observed working would leave the silent-degrade window covered by
+neither.
 
 **Reviews are not cheap.** One structural review is nine LLM steps and 5–9 minutes of
 wall clock. On a hosted frontier model that's roughly $0.12–0.15 each; on local inference

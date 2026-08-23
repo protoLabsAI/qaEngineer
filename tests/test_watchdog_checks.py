@@ -140,6 +140,21 @@ class OAuthHealth(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("not a native OAuth lane", lines[0])
 
+    def test_messages_carry_no_verdict_prefix(self):
+        # main() prepends "OK: "/"FAIL: " from the exit code. A branch that bakes its
+        # own prefix in prints "OK: OK: …" — caught in review, and invisible to the
+        # other tests here because they all call evaluate() directly and never main().
+        for cfg, status in (
+            ({"provider": "openai", "name": "protolabs/cloud"}, []),
+            (self.NATIVE, oauth_status()),
+            (self.NATIVE, oauth_status(signed_in=False)),
+        ):
+            _, lines = evaluate(cfg, status)
+            self.assertFalse(
+                lines[0].startswith(("OK:", "FAIL:")),
+                f"evaluate() must not prefix its own verdict: {lines[0]!r}",
+            )
+
     def test_expired_but_refreshable_is_not_an_alarm(self):
         # Refresh is ON USE, so a busy agent legitimately sits at or past its access
         # token's expiry. Alarming on proximity would cry wolf every few hours.

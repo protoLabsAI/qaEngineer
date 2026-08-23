@@ -61,7 +61,9 @@ def evaluate(model_cfg: dict, providers: list[dict]) -> tuple[int, list[str]]:
     name = (model_cfg.get("name") or "").strip()
 
     if provider not in NATIVE_PROVIDERS:
-        return 0, [f"OK: model.provider={provider!r} is not a native OAuth lane — no credential to check."]
+        # No "OK: " here — main() prepends the verdict prefix from the exit code, and
+        # baking a second one in produced "OK: OK: …" for every gateway-backed agent.
+        return 0, [f"model.provider={provider!r} is not a native OAuth lane — no credential to check."]
 
     lines.append(f"lane: {provider} · {name}")
     problems: list[str] = []
