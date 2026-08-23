@@ -92,13 +92,18 @@ case "$MODE" in
     fi
     ;;
   fallback)
-    # Did Vera silently answer from her FALLBACK model? Her primary is a native-OAuth
-    # Claude subscription, which bypasses the gateway entirely (ADR 0097) — so
-    # protoAgent-UA traffic arriving AT the gateway from her container is, by
-    # construction, a fallback. protoAgent emits nothing when this happens (langchain's
-    # ModelFallbackMiddleware swallows the primary's exception without so much as a log
-    # line; filed as protoAgent#2956), so an inference from gateway metrics is the only
-    # signal there is until that issue lands a `model.fallback` event.
+    # Did Vera silently answer from her FALLBACK model? The check reads
+    # `routing.fallback_models` from her LIVE config and counts only gateway traffic
+    # requesting those, so it stays correct whichever lane is primary — an earlier
+    # version hardcoded "any protoAgent-UA gateway traffic is a fallback", which was
+    # true only while the primary was a native-OAuth subscription bypassing the gateway,
+    # and inverted the moment she moved back to a gateway primary.
+    #
+    # Why infer at all: on cores before 0.145.0 protoAgent emitted NOTHING on failover
+    # (langchain's ModelFallbackMiddleware swallows the primary's exception without so
+    # much as a log line; filed as protoAgent#2956, fixed there). Once the RUNNING
+    # instance is on 0.145.0+ and its `model.fallback` event is seen firing, retire this
+    # inference and subscribe to the event instead.
     out="$("$BIN/vera-model-fallback.py" --container vera "$@" 2>&1)"; rc=$?
     ;;
   oauth)
