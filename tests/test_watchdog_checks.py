@@ -102,6 +102,45 @@ def oauth_status(**over) -> list[dict]:
     return [base]
 
 
+class FallbackModelFilter(unittest.TestCase):
+    """The lane-shape-independent rule: only traffic to a CONFIGURED fallback counts.
+
+    Added when Vera moved from a native-OAuth primary back to a gateway primary
+    (2026-08-23). Under the old "any gateway traffic is a fallback" rule that switch
+    silently inverted the check — every ordinary review would have read as a degrade and
+    paged #alerts every 15 minutes. These pin the rule that makes it survive a lane
+    change without anyone editing the script.
+    """
+
+    def test_primary_traffic_is_not_a_fallback(self):
+        text = sample(requested_model="protolabs/smart", value=40.0)
+        total, _ = fallback_requests(text, VERA_IP, {"protolabs/cloud"})
+        self.assertEqual(total, 0.0, "the primary lane doing its job is not a degrade")
+
+    def test_fallback_traffic_counts(self):
+        text = sample(requested_model="protolabs/cloud", value=7.0)
+        total, by_model = fallback_requests(text, VERA_IP, {"protolabs/cloud"})
+        self.assertEqual(total, 7.0)
+        self.assertEqual(by_model, {"protolabs/cloud": 7.0})
+
+    def test_mixed_traffic_counts_only_the_fallback(self):
+        text = "\n".join([
+            sample(requested_model="protolabs/smart", value=100.0),   # primary
+            sample(requested_model="protolabs/cloud", value=3.0),     # fallback
+            sample(requested_model="protolabs/cloud", user_agent="node", value=50.0),  # clawpatch
+        ])
+        total, by_model = fallback_requests(text, VERA_IP, {"protolabs/cloud"})
+        self.assertEqual(total, 3.0)
+        self.assertEqual(by_model, {"protolabs/cloud": 3.0})
+
+    def test_none_counts_every_model(self):
+        # The native-primary shape: nothing configured to filter on, so any agent
+        # gateway call is a fallback by construction.
+        text = sample(requested_model="protolabs/smart", value=9.0)
+        total, _ = fallback_requests(text, VERA_IP, None)
+        self.assertEqual(total, 9.0)
+
+
 class OAuthHealth(unittest.TestCase):
     NATIVE = {"provider": "anthropic-oauth", "name": "claude-sonnet-5"}
 

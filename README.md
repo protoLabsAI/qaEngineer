@@ -87,9 +87,18 @@ plus prior-round context. In practice that's **~37k tokens per finder**.
   change. Model settings are host-scoped (ADR 0047) — **or** a native subscription lane
   (see below), which is not a gateway edit at all.
 
-**The reference host's lane (since 2026-08-21):** `model.provider: anthropic-oauth` +
-`model.name: claude-sonnet-5`, with `routing.fallback_models: ["protolabs/smart"]` behind
-it. Native OAuth **bypasses the gateway entirely** (ADR 0097) — the fallback alias is
+**The reference host's lane (since 2026-08-23):** `protolabs/smart` on the gateway
+(`model.provider: openai`), with `routing.fallback_models: ["protolabs/cloud"]` behind
+it. She ran a native Claude subscription (`anthropic-oauth` / `claude-sonnet-5`) from
+2026-08-21 to 08-23 and it reviewed well — ~25% faster, same grounding rate — but a
+five-finder panel across a fleet's worth of repos **exhausted the subscription's 7-day
+quota in under two days** (`anthropic-ratelimit-unified-7d-status: rejected`,
+`retry-after: 356343` = 4.1 days). A reviewer that cannot review for four days is not a
+reviewer, so the gateway is the sustainable primary and a subscription is the treat.
+Set `model.name` and `model.provider` in the SAME config POST either way: they are one
+decision (protoAgent#2623).
+
+**The old native-OAuth shape, for reference:** Native OAuth **bypasses the gateway entirely** (ADR 0097) — the fallback alias is
 reachable only because protoAgent#2571 lets a namespaced slot name opt out of the native
 provider, so `model.api_base` + a gateway key must stay set even though the primary never
 uses them. Set `model.name` and `model.provider` in the SAME config POST: they are one

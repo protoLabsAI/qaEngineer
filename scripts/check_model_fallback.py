@@ -16,14 +16,19 @@ before its replacement is observed working would leave the silent-degrade window
 uncovered by both, which is the one outcome worth avoiding. Once the event is confirmed,
 delete this file: the event is ground truth where this is an inference from traffic.
 
-THE INFERENCE. Since 2026-08-21 Vera's primary is a NATIVE OAUTH provider
-(`model.provider: anthropic-oauth`, claude-sonnet-5), which per ADR 0097 bypasses the
-gateway entirely — her subscription traffic never touches LiteLLM. Her fallback is a
-gateway alias (`protolabs/smart`), reachable only because #2571 lets a namespaced slot
-name opt out of the native provider. So the two lanes are cleanly separable at the
-gateway, and the rule is simply:
+THE RULE. Ask the LIVE CONFIG which models are the fallback, then count only gateway
+traffic requesting THOSE:
 
-    a protoAgent-UA chat completion from Vera's container IP == a fallback
+    a protoAgent-UA chat completion from Vera's container IP,
+    whose `requested_model` is in `routing.fallback_models`   ==  a fallback
+
+This is deliberately NOT "any gateway traffic from her container". That shortcut worked
+only while her primary was a native-OAuth subscription bypassing the gateway entirely
+(ADR 0097) — and it silently inverted the moment she moved back to a gateway primary on
+2026-08-23, when it would have called every ordinary review a fallback and paged #alerts
+every 15 minutes. Reading the fallback list from the live config instead means the check
+is correct for BOTH lane shapes, and keeps working across the next switch without anyone
+remembering to come back and edit it.
 
 Two things share that gateway key and must NOT be counted:
 
@@ -68,6 +73,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from vera_api import operator_api_get
+
 DEFAULT_STATE = Path.home() / ".cache" / "vera-model-fallback.json"
 # The gateway publishes on the shared ai_default net; from ava's host namespace it is
 # reachable on the published port. Overridable for a different host/stack.
@@ -81,6 +88,22 @@ DEFAULT_COOLDOWN_MIN = 60
 
 _SAMPLE = re.compile(r"^litellm_proxy_total_requests_metric_total\{(?P<labels>.*)\}\s+(?P<value>[0-9.eE+-]+)$")
 _LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
+
+
+def _fallback_models(container: str) -> tuple[set[str], str]:
+    """(the configured fallback model names, the primary's name) from the LIVE config.
+
+    Read fresh every run, never hardcoded: the whole point of this check is to notice a
+    lane change, so it must not carry a stale idea of which lane is which.
+    """
+    cfg = operator_api_get(container, "/api/config").get("config", {})
+    fallbacks = {str(m).strip() for m in (cfg.get("routing", {}).get("fallback_models") or []) if str(m).strip()}
+    primary = str(cfg.get("model", {}).get("name") or "")
+    if primary in fallbacks:
+        # A fallback identical to the primary is a no-op lane, and counting it would
+        # report every ordinary call as a degrade. Refuse rather than cry wolf.
+        raise RuntimeError(f"fallback_models contains the primary model {primary!r} — nothing to distinguish")
+    return fallbacks, primary
 
 
 def _container_ip(container: str) -> str:
@@ -113,8 +136,13 @@ def _scrape(url: str) -> str:
         raise RuntimeError(f"cannot scrape {url}: {exc}") from exc
 
 
-def fallback_requests(metrics_text: str, agent_ip: str) -> tuple[float, dict[str, float]]:
-    """Total protoAgent-UA gateway chat requests from ``agent_ip``, and the per-model split.
+def fallback_requests(
+    metrics_text: str, agent_ip: str, fallback_models: set[str] | None = None
+) -> tuple[float, dict[str, float]]:
+    """Gateway chat requests from ``agent_ip`` that the AGENT made to a FALLBACK model.
+
+    ``fallback_models`` is the live `routing.fallback_models`; None counts every model
+    (the old native-primary shape, kept for the case where nothing is configured).
 
     Pure over the scrape text so the attribution rule is unit-testable without a live
     gateway — the rule is the load-bearing part, not the HTTP.
@@ -132,6 +160,8 @@ def fallback_requests(metrics_text: str, agent_ip: str) -> tuple[float, dict[str
             continue
         if labels.get("route") == EMBEDDING_ROUTE:
             continue
+        if fallback_models is not None and labels.get("requested_model") not in fallback_models:
+            continue  # the primary lane doing its job
         value = float(match.group("value"))
         total += value
         model = labels.get("requested_model", "?")
@@ -162,7 +192,8 @@ def main() -> int:
 
     try:
         agent_ip = _container_ip(args.container)
-        total, by_model = fallback_requests(_scrape(args.metrics_url), agent_ip)
+        fallbacks, primary = _fallback_models(args.container)
+        total, by_model = fallback_requests(_scrape(args.metrics_url), agent_ip, fallbacks)
     except Exception as exc:  # noqa: BLE001 — every failure here is operational, exit 2
         print(f"UNREACHABLE: {exc}")
         return 2
@@ -181,7 +212,8 @@ def main() -> int:
 
     verdict = 0
     if previous is None:
-        print(f"BASELINE: {args.container} @ {agent_ip} — {int(total)} fallback requests so far [{split}]")
+        print(f"BASELINE: {args.container} @ {agent_ip} · primary={primary} fallback={sorted(fallbacks)} — "
+              f"{int(total)} fallback requests so far [{split}]")
         print("First run: recorded. Growth is what alarms, so this run cannot.")
     elif total < previous:
         # The gateway restarted and its counters reset. Re-baseline rather than reading
@@ -205,7 +237,7 @@ def main() -> int:
                 print(f"FALLBACK: {head}")
                 print(
                     f"Vera answered {int(delta)} model calls from her fallback lane, not "
-                    "claude-sonnet-5. Check the subscription: "
+                    f"{primary}. Check the primary lane: "
                     "`curl -X POST localhost:7870/api/config/test-model` in the container "
                     "(401/403 = re-auth needed, 429 = rate-limited, it will pass)."
                 )
