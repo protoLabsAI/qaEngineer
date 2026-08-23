@@ -21,6 +21,15 @@ jobs:
           assert m["archetype"]["soul"].strip(), "archetype soul present"
           print("manifest ok:", m["id"], "-", len(m["plugins"]), "members")
           PY
+      - name: Watchdog check logic
+        # The attribution rule in check_model_fallback.py and the verdict rules in
+        # check_oauth_health.py decide whether #alerts gets woken — a bug there is
+        # either a silent degrade nobody hears about or a pager that cries wolf, and
+        # neither shows up in a smoke run against a healthy container. Stdlib
+        # unittest: CI here is python3 + PyYAML, and a watchdog suite earning a
+        # dependency install is the wrong trade.
+        run: python3 -m unittest discover tests -v
+
       - name: README pins match bundle manifest and Dockerfile
         # Prevents the member-table and base-image prose from drifting out of sync
         # with the canonical pins in protoagent.bundle.yaml and the Dockerfile FROM line.
