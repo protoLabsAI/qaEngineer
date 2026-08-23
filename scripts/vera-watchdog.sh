@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Runner + alerter for Vera's two watchdogs (qaEngineer#37).
+# Runner + alerter for Vera's four watchdogs — health, drift, fallback, oauth
+# (qaEngineer#37 shipped the first two; the model-lane pair arrived with the move to a
+# native Claude subscription).
 #
 # WHY THIS FILE EXISTS AT ALL, AND WHY IT LIVES HERE:
 #
-# Both checks shipped in qaEngineer/scripts/ with docstrings saying "run from the ava
+# The first two shipped in qaEngineer/scripts/ with docstrings saying "run from the ava
 # fleet cron" — and then nothing ever ran them. The review-health alarm was written
 # precisely because 24 PRs merged with no review and the only record was an inbox
 # nobody read; leaving that alarm unscheduled reproduced the same failure one level up.
