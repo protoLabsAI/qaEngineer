@@ -67,3 +67,45 @@ pr_reviewer:
   shadow_mode: false
   promotion_owner: true
   default_repo: ""
+
+# External secrets (ADR 0080) — Vera fetches her own runtime secrets from Infisical
+# using a UNIVERSAL-AUTH MACHINE IDENTITY, instead of having them injected once at
+# `docker compose up` by a human's `infisical run` session.
+#
+# WHY THIS EXISTS. The injected-at-deploy shape has two silent failure modes, and we
+# hit both. (1) A human CLI session expires — on 2026-08-21 ava's had, and the fleet
+# watchdogs had been running for two cycles WITHOUT `DISCORD_WEBHOOK_ALERTS`, which
+# means every alarm they could have raised would have gone to a log file instead of
+# Discord. The guard was disarmed and nothing said so. (2) Injected env is a SNAPSHOT:
+# rotate a secret in the vault and the running container keeps the old value until
+# someone remembers to recreate it. A machine identity has no session to expire, and
+# `refresh_seconds` re-fetches, so rotation propagates on its own.
+#
+# HOST HAS NO `/api` SUFFIX. The CLI's `--domain` wants `https://secrets.proto-labs.ai/api`;
+# this provider appends `/api/v1/...` itself, so the same value here 404s. Verified by
+# probing both shapes against the live server (bare host → 401 = endpoint found and
+# credentials rejected; with /api → 404).
+#
+# CREDENTIALS COME FROM ENV, never this file: INFISICAL_CLIENT_ID / INFISICAL_CLIENT_SECRET
+# (the provider's `bootstrap_env`). They are also PROTECTED — no fetched value can
+# overwrite them, so the identity cannot rotate itself out of existence mid-run.
+#
+# `required: true` is deliberate. With the secrets moved out of compose, a failed fetch
+# means no GitHub App key and no gateway key: she would boot and then fail every review
+# for reasons visible only in her own logs. Fail-fast makes it a restart loop the
+# healthcheck reports, which is the loud version of the same fact.
+#
+# NOT hydrated here: `A2A_AUTH_TOKEN`. The operator bearer is how you reach the API to
+# FIX a broken secrets connection — putting it behind that connection locks the door
+# with the key inside. It stays in compose.
+secrets_manager:
+  enabled: true
+  provider: infisical
+  host: https://secrets.proto-labs.ai
+  project_id: 8da5101a-4bde-4c9b-a42a-76da1965f2fe
+  environment: prod
+  path: /
+  recursive: true
+  refresh_seconds: 300
+  required: true
+  override_env: false
