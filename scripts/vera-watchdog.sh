@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runner + alerter for Vera's four watchdogs — health, drift, fallback, oauth
+# Runner + alerter for Vera's watchdogs — health, drift, fallback, oauth, prune
 # (qaEngineer#37 shipped the first two; the model-lane pair arrived with the move to a
 # native Claude subscription).
 #
@@ -18,6 +18,7 @@
 # live inside the thing it watches. Refresh these copies when the repo version changes:
 #
 #     install -m 644 ~/dev/qaEngineer/scripts/vera_api.py             ~/.local/bin/vera_api.py
+#     install -m 755 ~/dev/qaEngineer/scripts/prune_checkout_cache.py ~/.local/bin/vera-prune-cache.py
 #     install -m 755 ~/dev/qaEngineer/scripts/check_review_health.py   ~/.local/bin/vera-review-health.py
 #     install -m 755 ~/dev/qaEngineer/scripts/check_card_drift.py      ~/.local/bin/vera-card-drift.py
 #     install -m 755 ~/dev/qaEngineer/scripts/check_model_fallback.py  ~/.local/bin/vera-model-fallback.py
@@ -32,7 +33,7 @@
 # agent) are deliberately different alerts — the scripts draw that line on purpose, and
 # collapsing it would let an outage read as a clean gate.
 #
-# Usage:  vera-watchdog.sh health|drift|fallback|oauth [extra args passed to the check]
+# Usage:  vera-watchdog.sh health|drift|fallback|oauth|prune [extra args passed to the check]
 # Exit:   passes the underlying check's exit code through (0 ok, 1 verdict, 2 unreachable)
 
 set -uo pipefail
@@ -112,8 +113,16 @@ case "$MODE" in
     # outlive its refresh token with no traffic to reveal it.
     out="$("$BIN/vera-oauth-health.py" --container vera "$@" 2>&1)"; rc=$?
     ;;
+  prune)
+    # STOPGAP, not a watchdog: bound the checkout cache, because pr-reviewer's own
+    # CheckoutCache.prune() is defined, documented, unit-tested and never called
+    # (pr-reviewer-plugin#87). It reached 43 GiB / 1248 entries against its own
+    # 5 GiB / 50-entry caps and took ava to 92% disk. Delete this mode when #87 ships.
+    # Runs with --apply here; the underlying script dry-runs by default.
+    out="$("$BIN/vera-prune-cache.py" --container vera --apply "$@" 2>&1)"; rc=$?
+    ;;
   *)
-    echo "usage: $(basename "$0") health|drift|fallback|oauth" >&2; exit 64 ;;
+    echo "usage: $(basename "$0") health|drift|fallback|oauth|prune" >&2; exit 64 ;;
 esac
 
 echo "$out"

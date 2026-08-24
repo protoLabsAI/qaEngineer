@@ -240,7 +240,8 @@ exit 2 = unreachable kept as distinct alarms). Every one of them exists because 
 | `health` | `check_review_health.py` | is the gate still producing verdicts? (growth in unreviewed/exhausted, completion rate) |
 | `drift` | `check_card_drift.py` | does the live card still match the seed? |
 | `fallback` | `check_model_fallback.py` | did she silently answer from her fallback model? (gateway-metrics inference — protoAgent#2956) |
-| `oauth` | `check_oauth_health.py` | is the subscription credential still signed in, refreshable, and coherent with `model.name`? |
+| `oauth` | `check_oauth_health.py` | is the subscription credential still signed in, refreshable, and coherent with `model.name`? (a no-op on a gateway lane) |
+| `prune` | `prune_checkout_cache.py` | **stopgap** — bound the checkout cache, since the plugin's own `prune()` is never called (pr-reviewer-plugin#87) |
 
 The wrapper runs **installed copies** in `~/.local/bin`, not `scripts/*.py` — this repo is
 also the deploy source, so a branch switch would silently disarm a guard that lived inside
