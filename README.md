@@ -144,8 +144,13 @@ finders with a Gap noted; it never fails the review.
 
 ### 4. Config
 
-Set `pr_reviewer.repos` (the managed allowlist — the gate runs *before* any GitHub call,
-so an unlisted repo never triggers a lookup on your credentials) and `github.write: true`.
+Set `github.write: true`. `pr_reviewer.repos` is optional: **empty means review any repo
+the GitHub App installation covers** — installing the App on a repo is already an
+explicit, revocable, audited grant, so an empty list isn't "review nothing," it's
+"GitHub's installation picker is the only gate" (pr-reviewer-plugin#115). Set `repos`
+only when you want to review a *subset* of the installed repos; when set, it's checked
+*before* any GitHub call, so an unlisted repo never triggers a lookup on your
+credentials.
 
 Everything operator-tunable reads **config first, env as fallback**, and resolves **live**
 — editing `repos` or flipping a kill switch takes effect without a restart. See the
