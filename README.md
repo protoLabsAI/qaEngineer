@@ -14,8 +14,8 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 | Member | Pin | Role |
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
-| [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.5.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
-| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.36.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
+| [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.7.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
+| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.38.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification, 80% bar,
 self-restriction), also inlined in the manifest's `archetype.soul` so the new-agent picker
@@ -119,9 +119,18 @@ event (ADR 0039). The inference script is therefore scheduled for deletion — b
 yet, and the distinction matters: **pinning a version is not running it.** Vera rolls on
 watchtower after a merge, so between the pin landing and the roll completing she is on
 the old core with no event at all. Retire the script once the running instance reports
-0.145.0 *and* the event has been seen firing; deleting the inference before its
+the pinned core *and* the event has been seen firing; deleting the inference before its
 replacement is observed working would leave the silent-degrade window covered by
 neither.
+
+**#2995 is FIXED in core 0.148.0** (carried since): the observable failover above only
+ever wired onto the *lead* agent — every panel finder runs as a subagent via
+`_run_subagent()`, which built its own middleware stack and omitted
+`routing.fallback_models` entirely. A rate-limited primary therefore killed the whole
+panel instead of failing over (this is what actually happened on 2026-08-23: the
+gateway fallback counter sat unchanged across two rate-limit incidents while panels
+exhausted). The subagent stack now mirrors the lead's, so `fallback_models` finally
+protects reviews, not just conversational turns.
 
 **Reviews are not cheap.** One structural review is nine LLM steps and 5–9 minutes of
 wall clock. On a hosted frontier model that's roughly $0.12–0.15 each; on local inference
@@ -201,7 +210,7 @@ from the payload):
 ## Deploying Vera (the reference host)
 
 This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (**pinned
-base** — `protoagent:0.145.0`, in step with the manifest's `verified_against`; bump
+base** — `protoagent:0.163.0`, in step with the manifest's `verified_against`; bump
 deliberately so a member-pin bump can't drag the core forward on the same roll) +
 node/`clawpatch` + the bundle members baked at their manifest pins +
 `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
@@ -241,7 +250,6 @@ exit 2 = unreachable kept as distinct alarms). Every one of them exists because 
 | `drift` | `check_card_drift.py` | does the live card still match the seed? |
 | `fallback` | `check_model_fallback.py` | did she silently answer from her fallback model? (gateway-metrics inference — protoAgent#2956) |
 | `oauth` | `check_oauth_health.py` | is the subscription credential still signed in, refreshable, and coherent with `model.name`? (a no-op on a gateway lane) |
-| `prune` | `prune_checkout_cache.py` | **stopgap** — bound the checkout cache, since the plugin's own `prune()` is never called (pr-reviewer-plugin#87) |
 
 The wrapper runs **installed copies** in `~/.local/bin`, not `scripts/*.py` — this repo is
 also the deploy source, so a branch switch would silently disarm a guard that lived inside

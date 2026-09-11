@@ -9,7 +9,7 @@
 # protoAgent core forward on the same image roll — core and member bumps are
 # decoupled. Bump this deliberately (and re-verify), keeping it in step with the
 # manifest's `verified_against`. Tag format is bare semver (no `v` prefix).
-FROM ghcr.io/protolabsai/protoagent:0.145.0
+FROM ghcr.io/protolabsai/protoagent:0.163.0
 
 USER root
 
@@ -27,11 +27,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Bake the bundle members at their RELEASE TAGS (both public — no build secrets).
 # The tags mirror protoagent.bundle.yaml's pins; bump both together (the manifest
 # is the source of truth, this bake is its image form).
-ARG GITHUB_PLUGIN_REF=v0.5.0
+ARG GITHUB_PLUGIN_REF=v0.7.0
 RUN git clone --depth 1 --branch "${GITHUB_PLUGIN_REF}" \
       https://github.com/protoLabsAI/github-plugin.git /opt/protoagent/plugins/github \
     && rm -rf /opt/protoagent/plugins/github/.git
-ARG PR_REVIEWER_PLUGIN_REF=v0.36.0
+ARG PR_REVIEWER_PLUGIN_REF=v0.38.0
 RUN git clone --depth 1 --branch "${PR_REVIEWER_PLUGIN_REF}" \
       https://github.com/protoLabsAI/pr-reviewer-plugin.git /opt/protoagent/plugins/pr-reviewer \
     && rm -rf /opt/protoagent/plugins/pr-reviewer/.git
