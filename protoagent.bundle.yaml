@@ -45,9 +45,12 @@ config:
     default_repo: ""
     repos: []
   # The reviewer machinery (ADR 0078 Phase C). SHADOW by default: every verdict is a
-  # COMMENT review. repos = the managed allowlist (webhook + sweep scope) — empty
-  # until the operator names them. webhook_secret is a SECRET (set via Settings; it
-  # lands in the untracked secrets.yaml overlay).
+  # COMMENT review. repos = an OPTIONAL narrowing allowlist (webhook + sweep scope) —
+  # EMPTY means "whatever the GitHub App installation covers", not "review nothing".
+  # GitHub's own installation repo-picker is the real gate; set `repos` only to
+  # restrict review to a subset of the installed repos (pr-reviewer-plugin#115).
+  # webhook_secret is a SECRET (set via Settings; it lands in the untracked
+  # secrets.yaml overlay).
   pr_reviewer:
     repos: []
     shadow_mode: true
