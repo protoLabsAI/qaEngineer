@@ -37,6 +37,10 @@ a2a:
 
 plugins:
   enabled: [workflows, github, pr-reviewer]
+  # Core >= 0.165 ships cowork ON by default, and cowork turns execute_code on. A reviewer
+  # that reads untrusted PR content with GitHub write credentials must not gain code
+  # execution by a core bump: keep both off.
+  disabled: [cowork, execute_code]
 
 # The verdict surface (github-plugin). Write is required to post reviews; the
 # CI-terminal + self-review guards live INSIDE the tools. gh auth = GH_TOKEN env
