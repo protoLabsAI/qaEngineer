@@ -27,7 +27,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # Bake the bundle members at their RELEASE TAGS (both public — no build secrets).
 # The tags mirror protoagent.bundle.yaml's pins; bump both together (the manifest
 # is the source of truth, this bake is its image form).
-ARG GITHUB_PLUGIN_REF=v0.7.1
+ARG GITHUB_PLUGIN_REF=v0.8.0
 RUN git clone --depth 1 --branch "${GITHUB_PLUGIN_REF}" \
       https://github.com/protoLabsAI/github-plugin.git /opt/protoagent/plugins/github \
     && rm -rf /opt/protoagent/plugins/github/.git
