@@ -9,7 +9,7 @@
 # protoAgent core forward on the same image roll — core and member bumps are
 # decoupled. Bump this deliberately (and re-verify), keeping it in step with the
 # manifest's `verified_against`. Tag format is bare semver (no `v` prefix).
-FROM ghcr.io/protolabsai/protoagent:0.167.0
+FROM ghcr.io/protolabsai/protoagent:0.168.0
 
 USER root
 
@@ -17,7 +17,7 @@ USER root
 # pr-reviewer plugin shells out to. The base (bookworm) ships node 18 at best;
 # clawpatch needs >=22, so use nodesource. Pin the CLI so image builds are
 # reproducible; bump deliberately.
-ARG PROTOPATCH_VERSION=0.6.1
+ARG PROTOPATCH_VERSION=0.6.2
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
