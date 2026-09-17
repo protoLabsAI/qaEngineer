@@ -1,0 +1,92 @@
+name: Review at head
+
+# Ported from protoAgent (.github/workflows/review-at-head.yml + scripts/review_at_head.py),
+# unchanged apart from this comment.
+#
+# Why it is needed here: `main` requires the reviewer app's own `QA panel` check, and the app
+# WITHHOLDS that check whenever a round is incomplete. A single review lane dying on a gateway
+# error caps an otherwise clean pass at WARN, the clearing check never posts, and the PR sits
+# BLOCKED forever with nothing red and nothing to re-run — the head keeps the strictest verdict
+# it ever had, so re-summoning the same commit cannot clear it either.
+#
+# This job answers one question instead: is there a panel verdict for THIS head SHA? It posts
+# that as a `Review at head` commit status. A WARN satisfies it — ADR 0078 keeps that tier
+# advisory — and only a missing verdict or an explicitly blocking one (FAIL/BLOCK/REJECT)
+# fails. That is what makes it safe to mark required without making the advisory tier secretly
+# mandatory, and `skip-review-gate` is the documented escape hatch.
+#
+# Wiring: once this has run once, make `Review at head` the required context on `main` in place
+# of `QA panel`.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    # Fast path, best-effort: fires only for PRs whose branch contains this file (see the
+    # schedule comment). Kept because when it does fire it turns a PR green in seconds.
+    types: [submitted, dismissed]
+  schedule:
+    # Every 10 minutes, and this is the PRIMARY refresh, not a backstop. `pull_request_review`
+    # runs the workflow from the PR's OWN BRANCH (unlike `pull_request_target`, which always
+    # uses the base) — so a PR branched before this file existed never fires that event, and a
+    # fork PR that does fire it gets a read-only token that cannot post a status. Observed
+    # live: reviews landing on #3323 and #3319 at 00:17 and 00:18 triggered no run at all,
+    # and only the sweep turned them green. Now that this check is REQUIRED, the sweep interval
+    # is the worst-case time a reviewed PR sits red — an hour of that is not acceptable.
+    #
+    # NOTE: this asks for 10 minutes and does not get it. GitHub throttles high-frequency
+    # schedules, and a newly added one takes a while to register at all (this fired nothing for
+    # ~30 minutes after it merged). Observed cadence here is ~30 min: 01:10, 01:40, 02:09, 02:47.
+    # Asking for 10 still yields a shorter interval than asking for 30, so it stays — but the
+    # honest guarantee is "roughly half-hourly", and `gh workflow run "Review at head"` is the
+    # way to refresh now. Do not tighten this expecting it to help.
+    - cron: "*/10 * * * *"
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the decision without posting statuses"
+        type: boolean
+        default: false
+
+permissions:
+  statuses: write
+  pull-requests: read
+  contents: read
+
+concurrency:
+  # Per PR, so a rapid push/review pair cannot post two statuses out of order for one head.
+  # Never cancel-in-progress: a cancelled run leaves the status it was about to write missing,
+  # which is the exact silence this gate exists to remove.
+  group: review-at-head-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  assert:
+    # NOT named "Review at head": that is the COMMIT STATUS this job posts, and a check-run
+    # sharing the name puts three same-named rows on every PR — two green (the job ran fine)
+    # and one red (the verdict is missing). The rollup does resolve to failure, but the
+    # required-check context would then be ambiguous between a check-run that only says "the
+    # job executed" and the status that carries the actual answer. One name, one meaning.
+    name: Assert a panel verdict at head
+    runs-on: ubuntu-latest # workspace-config: allow-hosted-runner public repo — GH-hosted is free
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert a verdict exists for this head
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+          # Rollout gate for the coverage / standing-block contract (#3334). Left EMPTY (off)
+          # until the QA-panel emitter + approve-on-green promoter — both outside this repo —
+          # ship the authoritative `coverage`/`standing_block` attributes; enforcing fail-closed
+          # on their absence against today's legacy markers would red every open PR. When present,
+          # an explicit attribute is honoured regardless of this flag; the flag only decides how a
+          # MISSING attribute is read. Flip it by setting the `REQUIRE_COVERAGE_CONTRACT` repo
+          # variable to a truthy value ("1"/"true") once the producer rollout is live — no code change.
+          REQUIRE_COVERAGE_CONTRACT: ${{ vars.REQUIRE_COVERAGE_CONTRACT }}
+        run: python3 scripts/review_at_head.py
