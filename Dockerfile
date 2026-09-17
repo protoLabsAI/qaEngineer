@@ -17,7 +17,7 @@ USER root
 # pr-reviewer plugin shells out to. The base (bookworm) ships node 18 at best;
 # clawpatch needs >=22, so use nodesource. Pin the CLI so image builds are
 # reproducible; bump deliberately.
-ARG PROTOPATCH_VERSION=0.6.1
+ARG PROTOPATCH_VERSION=0.6.2
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
