@@ -15,7 +15,7 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
 | [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.8.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
-| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.48.2 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
+| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.49.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification, 80% bar,
 self-restriction), also inlined in the manifest's `archetype.soul` so the new-agent picker
@@ -215,7 +215,7 @@ from the payload):
 ## Deploying Vera (the reference host)
 
 This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (**pinned
-base** — `protoagent:0.174.0`, in step with the manifest's `verified_against`; bump
+base** — `protoagent:0.174.1`, in step with the manifest's `verified_against`; bump
 deliberately so a member-pin bump can't drag the core forward on the same roll) +
 node/`clawpatch` + the bundle members baked at their manifest pins +
 `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
@@ -234,6 +234,14 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > Apply live changes via the operator API or the config volume directly. This is why the
 > operator-tunable state has env fallbacks: the compose env is re-applied on every roll,
 > which keeps the config volume disposable.
+>
+> **Live values that differ from the seed (set 2026-09-24 via `POST /api/config`):**
+> `pr_reviewer.finder_timeout_s: 2100` and `pr_reviewer.panel_attempt_timeout: 2400`
+> (up from the plugin defaults, for the context-heavy mythxengine-sdk diffs). A config
+> POST makes the host **reload every plugin without stopping the running sweep** —
+> before pr-reviewer v0.49.0 that left two dispatchers alive and the sweep backfilling
+> duplicate panels (protoAgent#3593, pr-reviewer-plugin#198) — so follow a live POST with
+> a container restart at an idle moment, or let the next roll recreate the container.
 
 _Bundle CI validates the manifest on every push_ — and asserts the seed carries Vera's A2A
 card identity (non-template description + the `pr_review` skill), so a seed that regresses
