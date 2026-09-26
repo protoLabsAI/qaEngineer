@@ -235,9 +235,14 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > operator-tunable state has env fallbacks: the compose env is re-applied on every roll,
 > which keeps the config volume disposable.
 >
-> **Live values that differ from the seed (set 2026-09-24 via `POST /api/config`):**
+> **Live values that differ from the seed (set via `POST /api/config`, body
+> `{"config": {"pr_reviewer": {...}}}` — a top-level section without the `config` wrapper
+> is silently ignored and only triggers a reload):**
 > `pr_reviewer.finder_timeout_s: 2100` and `pr_reviewer.panel_attempt_timeout: 2400`
-> (up from the plugin defaults, for the context-heavy mythxengine-sdk diffs). A config
+> (2026-09-24, up from the plugin defaults, for the context-heavy mythxengine-sdk diffs) and
+> `pr_reviewer.time_budget_s: 900` (2026-09-26, up from 300 — the structural lane derives
+> clawpatch's per-request gateway timeout from it, and 270 s lost the whole pass on 10 of 90
+> rounds over large diffs; pr-reviewer-plugin#205). A config
 > POST makes the host **reload every plugin without stopping the running sweep** —
 > before pr-reviewer v0.49.0 that left two dispatchers alive and the sweep backfilling
 > duplicate panels (protoAgent#3593, pr-reviewer-plugin#198) — so follow a live POST with
