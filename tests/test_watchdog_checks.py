@@ -201,5 +201,130 @@ class OAuthHealth(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
+
+from check_review_health import window_health  # noqa: E402
+from smoke_replay import evaluate as smoke_evaluate  # noqa: E402
+
+NOW = 1_790_400_000.0
+
+
+def reviewed(ts_ago_s, *, complete=True, structural=False, lanes=None, reason=None):
+    row = {"event": "reviewed", "ts": NOW - ts_ago_s, "repo": "o/r", "pr": 1, "complete": complete}
+    if structural:
+        row["structural_unavailable"] = True
+        row["structural_reason"] = reason
+    if lanes:
+        row["incomplete_finders"] = list(lanes)
+    return row
+
+
+class RecentWindow(unittest.TestCase):
+    """The rule: judge the last N hours on their own — lifetime averages hide an evening."""
+
+    def test_quiet_window_is_healthy(self):
+        rows = [reviewed(60 * i) for i in range(1, 8)]
+        problems, summary = window_health(rows, now=NOW, hours=6)
+        self.assertEqual(problems, [])
+        self.assertIn("reviewed=7 incomplete=0", summary)
+
+    def test_incomplete_rate_needs_a_minimum_sample(self):
+        # 2 of 3 incomplete is 67% but three rows is noise — no alarm.
+        rows = [reviewed(10, complete=False, lanes=["find_crossfile"]), reviewed(20, complete=False), reviewed(30)]
+        self.assertEqual(window_health(rows, now=NOW)[0], [])
+
+    def test_incomplete_rate_alarms_and_names_the_lanes(self):
+        rows = [reviewed(10 * i, complete=False, lanes=["find_crossfile"]) for i in range(1, 4)]
+        rows += [reviewed(100, complete=False, structural=True, reason="exit-4:gateway-timeout")]
+        rows += [reviewed(200), reviewed(300)]
+        problems, _ = window_health(rows, now=NOW)
+        self.assertEqual(len(problems), 1)  # the rate (4/6) trips; one structural outage is under its own ceiling
+        self.assertTrue(any("4/6 rounds incomplete" in p and "find_crossfile×3" in p for p in problems))
+
+    def test_structural_outages_alarm_with_their_classes(self):
+        rows = [reviewed(10 * i, complete=False, structural=True, reason="exit-4:gateway-timeout") for i in range(1, 5)]
+        rows += [reviewed(500 + i) for i in range(6)]  # 4/10 = 40%, not above the rate ceiling
+        problems, _ = window_health(rows, now=NOW)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("structural lane unavailable on 4 rounds", problems[0])
+        self.assertIn("exit-4:gateway-timeout", problems[0])
+
+    def test_exhaustions_and_retries_are_counted_from_their_own_events(self):
+        rows = [{"event": "exhaustion", "ts": NOW - 100 * i, "repo": "o/terminal-plugin", "pr": 10} for i in range(3)]
+        rows += [{"event": "panel_retry", "ts": NOW - 50 * i, "repo": "o/r", "pr": i, "failed": ["verify"]} for i in range(5)]
+        problems, _ = window_health(rows, now=NOW)
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(any("3 exhausted rounds" in p and "terminal-plugin#10" in p for p in problems))
+        self.assertTrue(any("5 panel retries" in p and "verify" in p for p in problems))
+
+    def test_rows_outside_the_window_do_not_count(self):
+        rows = [reviewed(7 * 3600, complete=False, structural=True) for _ in range(10)]
+        self.assertEqual(window_health(rows, now=NOW, hours=6), ([], "window6h: reviewed=0 incomplete=0 structural_out=0 exhaustions=0 retries=0"))
+
+
+def replay(step_seconds, *, empty_diff=False, failed=(), degraded=(), verdict="PASS", findings=()):
+    return {
+        "runs": [
+            {
+                "run": {"repo": "o/r", "pr": 1, "head": "a" * 40},
+                "verdict": verdict,
+                "findings": list(findings),
+                "telemetry": {
+                    "failed_steps": list(failed),
+                    "degraded_steps": list(degraded),
+                    "empty_diff": empty_diff,
+                    "step_seconds": step_seconds,
+                },
+            }
+        ]
+    }
+
+
+REAL_PANEL = {
+    "find_structural": 137.95,
+    "find_conventions": 162.3,
+    "find_correctness": 258.05,
+    "find_crossfile": 287.89,
+    "find_removed_behavior": 366.8,
+    "synthesize": 5.15,
+    "verify": 5.03,
+    "report": 6.18,
+}
+
+
+class SmokeEvaluate(unittest.TestCase):
+    """The rule: a replay is believed only when every lane demonstrably ran."""
+
+    def test_the_2026_09_26_post_roll_replay_passes(self):
+        problems, summary = smoke_evaluate(replay(REAL_PANEL))
+        self.assertEqual(problems, [])
+        self.assertIn("verdict=PASS findings=0", summary)
+        self.assertIn("structural=138s", summary)
+
+    def test_merged_head_shape_is_refused_on_the_lane_floor(self):
+        fast = {**REAL_PANEL, **{s: 5.0 for s in ("find_correctness", "find_crossfile", "find_conventions")}}
+        problems, _ = smoke_evaluate(replay(fast))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("merged-head trap", problems[0])
+        self.assertIn("find_correctness=5s", problems[0])
+
+    def test_empty_diff_failed_and_missing_steps_are_each_named(self):
+        partial = {k: v for k, v in REAL_PANEL.items() if k != "verify"}
+        problems, _ = smoke_evaluate(replay(partial, empty_diff=True, failed=["verify"]))
+        self.assertEqual(len(problems), 3)
+        self.assertTrue(any("empty_diff" in p for p in problems))
+        self.assertTrue(any("failed steps: verify" in p for p in problems))
+        self.assertTrue(any("never ran: verify" in p for p in problems))
+
+    def test_a_degraded_lane_is_reported_not_failed(self):
+        problems, summary = smoke_evaluate(replay(REAL_PANEL, degraded=["find_crossfile"], verdict="WARN"))
+        self.assertEqual(problems, [])
+        self.assertIn("degraded=['find_crossfile']", summary)
+
+    def test_no_run_is_a_failure(self):
+        problems, summary = smoke_evaluate({"runs": []})
+        self.assertEqual(summary, "no run")
+        self.assertTrue(problems and problems[0].startswith("no run"))
+
+
 if __name__ == "__main__":
     unittest.main()
