@@ -22,6 +22,7 @@ credential to leak or expire — which is the point.
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 
 DEFAULT_PORT = 7870
@@ -37,7 +38,7 @@ def operator_api_get(container: str, path: str, *, port: int = DEFAULT_PORT) -> 
     """
     cmd = (
         f'curl -s -m {CURL_TIMEOUT_S} -H "Authorization: Bearer $A2A_AUTH_TOKEN" '
-        f"localhost:{port}{path}"
+        f"localhost:{port}{shlex.quote(path)}"
     )
     out = subprocess.run(
         ["docker", "exec", container, "sh", "-c", cmd],
@@ -60,7 +61,7 @@ def operator_api_post(container: str, path: str, body: dict, *, port: int = DEFA
     """
     cmd = (
         f'curl -s -m {timeout_s} -X POST -H "Authorization: Bearer $A2A_AUTH_TOKEN" '
-        f'-H "Content-Type: application/json" -d @- localhost:{port}{path}'
+        f'-H "Content-Type: application/json" -d @- localhost:{port}{shlex.quote(path)}'
     )
     out = subprocess.run(
         ["docker", "exec", "-i", container, "sh", "-c", cmd],
@@ -81,7 +82,7 @@ def telemetry_rows(container: str, days: list[str]) -> list[dict]:
     contributes nothing (``2>/dev/null``), a line that is not JSON is skipped. Raises
     ``RuntimeError`` only when the container itself cannot be reached.
     """
-    paths = " ".join(f"/sandbox/pr-reviewer/telemetry/{d}.jsonl" for d in days)
+    paths = " ".join(shlex.quote(f"/sandbox/pr-reviewer/telemetry/{d}.jsonl") for d in days)
     out = subprocess.run(
         ["docker", "exec", container, "sh", "-c", f"cat {paths} 2>/dev/null; true"],
         capture_output=True,

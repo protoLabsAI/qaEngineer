@@ -201,9 +201,6 @@ class OAuthHealth(unittest.TestCase):
         self.assertEqual(code, 0)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 from check_review_health import window_health  # noqa: E402
 from smoke_replay import evaluate as smoke_evaluate  # noqa: E402
@@ -327,3 +324,7 @@ class SmokeEvaluate(unittest.TestCase):
         problems, summary = smoke_evaluate({"runs": []})
         self.assertEqual(summary, "no run")
         self.assertTrue(problems and problems[0].startswith("no run"))
+
+
+if __name__ == "__main__":
+    unittest.main()
