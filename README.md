@@ -116,9 +116,9 @@ because her primary never goes there.
 **#2956 is FIXED in core 0.145.0**, which the pins above now carry:
 `ObservableModelFallbackMiddleware` logs a WARNING and publishes a `model.fallback` bus
 event (ADR 0039). The inference script is therefore scheduled for deletion — but not
-yet, and the distinction matters: **pinning a version is not running it.** Vera rolls on
-watchtower after a merge, so between the pin landing and the roll completing she is on
-the old core with no event at all. Retire the script once the running instance reports
+yet, and the distinction matters: **pinning a version is not running it.** Vera no longer
+auto-rolls (she is opted out of watchtower), so between a merge landing and someone
+rolling her she is on the old core with no event at all. Retire the script once the running instance reports
 the pinned core *and* the event has been seen firing; deleting the inference before its
 replacement is observed working would leave the silent-degrade window covered by
 neither.
@@ -214,14 +214,14 @@ from the payload):
 
 ## Deploying Vera (the reference host)
 
-This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (**pinned
-base** — `protoagent:0.183.0`, in step with the manifest's `verified_against`; bump
-deliberately so a member-pin bump can't drag the core forward on the same roll) +
+This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (base
+`protoagent:latest`, last verified against `0.183.0` per the manifest's
+`verified_against`; she does not auto-update — roll her on purpose) +
 node/`clawpatch` + the bundle members baked at their manifest pins +
 `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
 
-Published as `ghcr.io/protolabsai/vera:latest` on every main push; watchtower rolls in
-~60s. She runs **headless** (`PROTOAGENT_UI: none`) — the tailnet port serves the
+Published as `ghcr.io/protolabsai/vera:latest` on every main push. She is opted out of
+watchtower and rolls only on demand (`homelab-iac`: `scripts/fleet-roll.sh vera`). She runs **headless** (`PROTOAGENT_UI: none`) — the tailnet port serves the
 token-gated operator API (eval, manual dispatch, summon health) and A2A; GitHub webhooks
 arrive via the fleet's `hooks.proto-labs.ai` cloudflared route. Compose + ingress live in
 homelab-iac (`stacks/vera/`).

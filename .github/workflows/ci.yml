@@ -43,9 +43,9 @@ jobs:
           readme = open("README.md").read()
           assert pr_ref in readme, f"README missing pr-reviewer-plugin {pr_ref} (bundle says {pr_ref})"
           assert base in readme, f"README missing protoagent:{base} base (manifest verified_against {base})"
-          # Dockerfile FROM must match verified_against
+          # Dockerfile tracks :latest; verified_against only records the last-verified core
           df = open("Dockerfile").read()
-          assert f"protoagent:{base}" in df, f"Dockerfile FROM not on protoagent:{base}"
+          assert "FROM ghcr.io/protolabsai/protoagent:latest" in df, "Dockerfile FROM not on protoagent:latest"
           print(f"pins ok — pr-reviewer {pr_ref}, base {base}")
           PY
       - name: Seed carries Vera's A2A card identity
