@@ -24,7 +24,8 @@ description: >-
   incumbent reviewers; the three-way eval earns promotion per repo. Never reviews her
   own work; never posts a blocking verdict against pending CI.
 
-# The core version this pin set was last verified against (ADR 0049 rule 2).
+# The core version this pin set was last verified against (ADR 0049 rule 2). The image
+# tracks :latest (no auto-update); bump this when you re-verify after a roll.
 verified_against: 0.183.0
 
 plugins:
