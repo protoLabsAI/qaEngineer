@@ -39,7 +39,7 @@ import json
 import sys
 from pathlib import Path
 
-from vera_api import operator_api_get
+from vera_api import operator_api_get, telemetry_rows
 
 # New PRs that exhausted and have no verdict SINCE THE LAST RUN. Not zero because the
 # backfill sweep recovers some on a delay — protoAgent#2546 sat unreviewed for ~35min
@@ -54,6 +54,17 @@ MAX_INBOX_GROWTH = 5
 MIN_COMPLETION_RATE = 0.80
 
 DEFAULT_STATE = Path.home() / ".cache" / "vera-review-health.json"
+
+# The RECENT window (issue: 2026-09-25 replica stall). The lifetime counters above cannot
+# see a bad evening — 800+ reviews average it away — so the telemetry JSONL is read for
+# the last WINDOW_HOURS and judged on its own. Rows are few in six hours, so every rate
+# has a minimum sample and every count is small and absolute.
+WINDOW_HOURS = 6
+WINDOW_MIN_ROWS = 5  # below this a rate is noise
+MAX_INCOMPLETE_RATE = 0.40  # incomplete rounds / reviewed rounds in the window
+MAX_STRUCTURAL_UNAVAILABLE = 3  # rounds whose structural lane was out
+MAX_EXHAUSTIONS = 2  # rounds that never got a verdict
+MAX_PANEL_RETRIES = 4  # attempts that failed a lane and were retried
 
 
 def _load_state(path: Path) -> dict:
@@ -88,6 +99,60 @@ def _growth(problems: list[str], label: str, now: int | None, before: object, li
         problems.append(f"{label} grew {delta} since last check ({before} -> {now}, allowed +{limit}){extra}")
 
 
+def window_health(rows: list[dict], *, now: float, hours: int = WINDOW_HOURS) -> tuple[list[str], str]:
+    """(problems, summary) for the telemetry rows of the last ``hours``. Pure, so the
+    thresholds are testable. A window with too few reviewed rows judges counts only."""
+    since = now - hours * 3600
+    recent = [r for r in rows if isinstance(r.get("ts"), (int, float)) and r["ts"] >= since]
+    reviewed = [r for r in recent if r.get("event") == "reviewed"]
+    incomplete = [r for r in reviewed if not r.get("complete", True)]
+    structural = [r for r in reviewed if r.get("structural_unavailable")]
+    exhaustions = [r for r in recent if r.get("event") == "exhaustion"]
+    retries = [r for r in recent if r.get("event") == "panel_retry"]
+    problems: list[str] = []
+    if len(reviewed) >= WINDOW_MIN_ROWS:
+        rate = len(incomplete) / len(reviewed)
+        if rate > MAX_INCOMPLETE_RATE:
+            lanes: dict[str, int] = {}
+            for r in incomplete:
+                for lane in (r.get("incomplete_finders") or []) + (r.get("degraded") or []):
+                    lanes[str(lane)] = lanes.get(str(lane), 0) + 1
+                if r.get("structural_unavailable"):
+                    lanes["find_structural"] = lanes.get("find_structural", 0) + 1
+            worst = ", ".join(f"{k}×{v}" for k, v in sorted(lanes.items(), key=lambda kv: -kv[1])[:3])
+            problems.append(
+                f"{len(incomplete)}/{len(reviewed)} rounds incomplete in the last {hours}h "
+                f"({rate:.0%} > {MAX_INCOMPLETE_RATE:.0%}){': ' + worst if worst else ''}"
+            )
+    if len(structural) > MAX_STRUCTURAL_UNAVAILABLE:
+        reasons = sorted({str(r.get("structural_reason") or "?") for r in structural})
+        problems.append(
+            f"structural lane unavailable on {len(structural)} rounds in the last {hours}h "
+            f"(allowed {MAX_STRUCTURAL_UNAVAILABLE}): {', '.join(reasons)}"
+        )
+    if len(exhaustions) > MAX_EXHAUSTIONS:
+        prs = sorted({f"{str(r.get('repo') or '').split('/')[-1]}#{r.get('pr')}" for r in exhaustions})
+        problems.append(f"{len(exhaustions)} exhausted rounds in the last {hours}h (allowed {MAX_EXHAUSTIONS}): {', '.join(prs)}")
+    if len(retries) > MAX_PANEL_RETRIES:
+        lanes = sorted({str(x) for r in retries for x in (r.get("failed") or [])})
+        problems.append(f"{len(retries)} panel retries in the last {hours}h (allowed {MAX_PANEL_RETRIES}): {', '.join(lanes)}")
+    summary = (
+        f"window{hours}h: reviewed={len(reviewed)} incomplete={len(incomplete)} "
+        f"structural_out={len(structural)} exhaustions={len(exhaustions)} retries={len(retries)}"
+    )
+    return problems, summary
+
+
+def _window_days(now: float, hours: int) -> list[str]:
+    """The telemetry files a window can span — it rolls at midnight, so up to two days."""
+    import datetime as _dt
+
+    end = _dt.datetime.fromtimestamp(now, _dt.timezone.utc)
+    start = _dt.datetime.fromtimestamp(now - hours * 3600, _dt.timezone.utc)
+    days = [start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")]
+    return days if days[0] != days[1] else days[:1]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--container", default="vera", help="container name (default: vera)")
@@ -97,6 +162,7 @@ def main() -> int:
     ap.add_argument("--max-inbox-growth", type=int, default=MAX_INBOX_GROWTH)
     ap.add_argument("--min-completion", type=float, default=MIN_COMPLETION_RATE)
     ap.add_argument("--no-save", action="store_true", help="do not update the state file (dry run)")
+    ap.add_argument("--window-hours", type=int, default=WINDOW_HOURS, help="recent-window length (0 disables)")
     args = ap.parse_args()
 
     try:
@@ -142,6 +208,20 @@ def main() -> int:
     if isinstance(rate, (int, float)) and rate < args.min_completion:
         problems.append(f"completion rate {rate:.2%} below {args.min_completion:.0%}")
 
+    # The recent window: the one place a bad evening shows before the lifetime averages move.
+    window_summary = ""
+    if args.window_hours > 0:
+        import time as _time
+
+        now = _time.time()
+        try:
+            rows = telemetry_rows(args.container, _window_days(now, args.window_hours))
+        except Exception as exc:  # noqa: BLE001 — the eval report already answered; say so, don't fail
+            notes.append(f"telemetry unreadable ({exc}) — recent-window checks skipped this run")
+        else:
+            window_problems, window_summary = window_health(rows, now=now, hours=args.window_hours)
+            problems.extend(window_problems)
+
     if not prev:
         notes.append(f"first run (no state at {args.state}) — recording baselines; growth alarms arm next run")
 
@@ -154,7 +234,7 @@ def main() -> int:
         f"dispatches={report.get('dispatches')} posted={report.get('reviews_posted')} "
         f"completion={rate} exhaustions={report.get('exhaustions')} "
         f"unreviewed={unreviewed} (lifetime) inbox={depth}"
-    )
+    ) + (f" | {window_summary}" if window_summary else "")
     for n in notes:
         print(f"note: {n}")
     if problems:
