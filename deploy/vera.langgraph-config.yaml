@@ -35,6 +35,15 @@ a2a:
         - "review https://github.com/protoLabsAI/protoAgent/pull/64"
         - "what's your verdict on PR #42 in protoLabsAI/qaEngineer?"
 
+# Error failover: when the primary (protolabs/smart, the local lane) errors, retry on
+# protolabs/cloud (DeepSeek direct, off-node — a separate backend, so it survives the
+# local replicas stalling; homelab-iac#276). ERROR failover only: a merely slow primary is
+# killed by the step timeout before this can act. Covers panel finders since core 0.148.0.
+# Live volume has carried this since 2026-09-28; keep the two in step. The `model:` block
+# is deliberately NOT pinned here (see header).
+routing:
+  fallback_models: ["protolabs/cloud"]
+
 plugins:
   enabled: [workflows, github, pr-reviewer]
   # Core >= 0.165 ships cowork ON by default, and cowork turns execute_code on. A reviewer
