@@ -235,6 +235,9 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > operator-tunable state has env fallbacks: the compose env is re-applied on every roll,
 > which keeps the config volume disposable.
 >
+> **Model failover:** `routing.fallback_models: ["protolabs/cloud"]` (2026-09-28) — set live via
+> the same `POST /api/config` and carried in the seed. Error failover only; a slow primary is not covered.
+>
 > **Panel budgets set on the live volume via `POST /api/config`** (body
 > `{"config": {"pr_reviewer": {...}}}` — a top-level section without the `config` wrapper
 > is silently ignored and only triggers a reload): `pr_reviewer.finder_timeout_s: 2100` and
