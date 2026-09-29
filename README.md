@@ -215,7 +215,7 @@ from the payload):
 ## Deploying Vera (the reference host)
 
 This repo doubles as Vera's image source: `Dockerfile` = stock protoAgent (base
-`protoagent:latest`, last verified against `0.183.0` per the manifest's
+`protoagent:latest`, last verified against `0.185.0` per the manifest's
 `verified_against`; she does not auto-update — roll her on purpose) +
 node/`clawpatch` + the bundle members baked at their manifest pins +
 `deploy/vera.langgraph-config.yaml` (seed, not force) + `SOUL.md`.
