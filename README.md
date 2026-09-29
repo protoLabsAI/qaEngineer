@@ -15,7 +15,7 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
 | [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.9.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
-| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.50.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
+| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.51.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification, 80% bar,
 self-restriction), also inlined in the manifest's `archetype.soul` so the new-agent picker
@@ -241,8 +241,11 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > **Panel budgets set on the live volume via `POST /api/config`** (body
 > `{"config": {"pr_reviewer": {...}}}` — a top-level section without the `config` wrapper
 > is silently ignored and only triggers a reload): `pr_reviewer.finder_timeout_s: 2100` and
-> `pr_reviewer.panel_attempt_timeout: 2400` (2026-09-24, up from the plugin defaults, for the
-> context-heavy mythxengine-sdk diffs) and `pr_reviewer.time_budget_s: 900` (2026-09-26, up
+> `pr_reviewer.panel_attempt_timeout: 3000` (2026-09-24, up from the plugin defaults, for the
+> context-heavy mythxengine-sdk diffs; the attempt was 2400 until 2026-09-29, when it moved to
+> finder + 900 s for the tail steps — 3000 s is the plugin's hard ceiling since v0.51.0,
+> pr-reviewer-plugin#219, and qaEngineer#94 was the cut-off-mid-verify symptom of 2400)
+> and `pr_reviewer.time_budget_s: 900` (2026-09-26, up
 > from 300 — the structural lane derives clawpatch's per-request gateway timeout from it, and
 > 270 s lost the whole pass on 10 of 90 rounds over large diffs; pr-reviewer-plugin#205).
 > The seed carries the same three values since 2026-09-26, so a fresh instance boots with

@@ -83,14 +83,17 @@ pr_reviewer:
   # Panel budgets — the values the running volume has carried since 2026-09-24/26, so a
   # FRESH instance does not boot on plugin defaults that measurably lost coverage:
   #   finder_timeout_s      2100  (default 900; the context-heavy mythxengine-sdk diffs)
-  #   panel_attempt_timeout 2400  (a minute over the finder budget, as the plugin clamps)
+  #   panel_attempt_timeout 3000  (finder budget + 900 s for the three tail steps at their 300 s
+  #                                default — qaEngineer#94: at 2400 a slow finder left ~300 s and
+  #                                verify was cut off. 3000 is the plugin's hard ceiling since
+  #                                v0.51.0 / pr-reviewer-plugin#219; above it is clamped)
   #   time_budget_s          900  (default 300; clawpatch's per-request gateway timeout is
   #                                derived from it, and 270 s lost the whole structural lane
   #                                on 10 of 90 rounds over large diffs — pr-reviewer-plugin#205)
   # Seed-once: this does NOT reach the running Vera — change hers via
   # POST /api/config {"config": {"pr_reviewer": {...}}} and keep the two in step.
   finder_timeout_s: 2100
-  panel_attempt_timeout: 2400
+  panel_attempt_timeout: 3000
   time_budget_s: 900
 
 # External secrets (ADR 0080) — Vera fetches her own runtime secrets from Infisical
