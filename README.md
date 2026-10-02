@@ -278,7 +278,7 @@ exit 2 = unreachable kept as distinct alarms). Every one of them exists because 
 
 | Mode | Check | Asks |
 |---|---|---|
-| `health` | `check_review_health.py` | is the gate still producing verdicts? (growth in unreviewed/exhausted, completion rate) |
+| `health` | `check_review_health.py` | is the gate still producing verdicts? (growth in unreviewed/exhausted, completion rate, a 6 h window, and the 24 h share of rounds whose structural lane was unavailable or partial, alarm above 15%) |
 | `drift` | `check_card_drift.py` | does the live card still match the seed? |
 | `fallback` | `check_model_fallback.py` | did she silently answer from her fallback model? (gateway-metrics inference — protoAgent#2956) |
 | `oauth` | `check_oauth_health.py` | is the subscription credential still signed in, refreshable, and coherent with `model.name`? (a no-op on a gateway lane) |
