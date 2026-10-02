@@ -202,7 +202,7 @@ class OAuthHealth(unittest.TestCase):
 
 
 
-from check_review_health import window_health  # noqa: E402
+from check_review_health import structural_share_health, window_health  # noqa: E402
 from smoke_replay import evaluate as smoke_evaluate  # noqa: E402
 
 NOW = 1_790_400_000.0
@@ -259,6 +259,71 @@ class RecentWindow(unittest.TestCase):
     def test_rows_outside_the_window_do_not_count(self):
         rows = [reviewed(7 * 3600, complete=False, structural=True) for _ in range(10)]
         self.assertEqual(window_health(rows, now=NOW, hours=6), ([], "window6h: reviewed=0 incomplete=0 structural_out=0 exhaustions=0 retries=0"))
+
+
+def structural_round(ts_ago_s, *, repo="o/protoAgent", out=False, partial=False, reason=None):
+    row = {
+        "event": "reviewed",
+        "ts": NOW - ts_ago_s,
+        "repo": repo,
+        "pr": 1,
+        "recipe": "code-review-structural",
+        "step_s": {"find_structural": 900.0},
+    }
+    if out or partial:
+        row.update(structural_unavailable=True, structural_reason=reason, complete=False)
+    if partial:
+        row["structural_partial"] = True
+    return row
+
+
+class StructuralShare(unittest.TestCase):
+    """The rule (pr-reviewer-plugin#232): a day where the structural lane is short on more than a
+    set share of rounds is an alarm, even when no 6 h window holds enough outages to trip."""
+
+    def test_an_ordinary_day_is_healthy(self):
+        rows = [structural_round(600 * i) for i in range(1, 19)]
+        rows += [structural_round(30_000, out=True, reason="exit-4:provider")]  # 1/19 ≈ 5%
+        problems, summary = structural_share_health(rows, now=NOW)
+        self.assertEqual(problems, [])
+        self.assertIn("rounds=19 gaps=1 partial=0 share=5%", summary)
+
+    def test_a_slow_bleed_across_the_day_alarms_with_reasons_and_repos(self):
+        # 2 gaps every ~6 h — never more than 3 in one window, so window_health stays quiet.
+        rows = [structural_round(3600 * i) for i in range(1, 21)]
+        rows += [structural_round(3600 * h + 60, out=True, reason="budget-timeout") for h in (1, 7, 13, 19)]
+        rows += [structural_round(3600 * h + 120, partial=True, reason="feature-cap") for h in (2, 8, 14, 20)]
+        self.assertEqual(window_health(rows, now=NOW, hours=6)[0], [])
+        problems, _ = structural_share_health(rows, now=NOW)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("structural lane short on 8/28 rounds in the last 24h (29% > 15%; 4 unavailable, 4 partial)", problems[0])
+        self.assertIn("budget-timeout×4, feature-cap×4", problems[0])
+        self.assertIn("protoAgent×8", problems[0])
+
+    def test_a_partial_pass_counts_as_a_gap(self):
+        rows = [structural_round(60 * i) for i in range(1, 9)]
+        rows += [structural_round(1000 + i, partial=True, reason="budget-timeout") for i in range(3)]
+        problems, _ = structural_share_health(rows, now=NOW)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("0 unavailable, 3 partial", problems[0])
+
+    def test_needs_a_minimum_sample(self):
+        rows = [structural_round(60 * i, out=True, reason="budget-timeout") for i in range(1, 6)]
+        self.assertEqual(structural_share_health(rows, now=NOW)[0], [])
+
+    def test_rounds_without_the_structural_lane_are_not_in_the_denominator(self):
+        rows = [reviewed(60 * i) for i in range(1, 40)]  # small-diff recipe: no structural lane
+        rows += [structural_round(5000 + i) for i in range(8)]
+        rows += [structural_round(9000 + i, out=True, reason="budget-timeout") for i in range(3)]
+        problems, summary = structural_share_health(rows, now=NOW)
+        self.assertIn("rounds=11 gaps=3", summary)
+        self.assertEqual(len(problems), 1)  # 3/11 = 27%, not 3/50
+
+    def test_rows_older_than_the_day_and_a_custom_ceiling(self):
+        rows = [structural_round(25 * 3600, out=True, reason="budget-timeout") for _ in range(20)]  # yesterday
+        rows += [structural_round(60 * i) for i in range(1, 10)] + [structural_round(99, out=True)]
+        self.assertEqual(structural_share_health(rows, now=NOW)[0], [])  # 1/10 today
+        self.assertEqual(len(structural_share_health(rows, now=NOW, max_share=0.05)[0]), 1)
 
 
 def replay(step_seconds, *, empty_diff=False, failed=(), degraded=(), verdict="PASS", findings=()):

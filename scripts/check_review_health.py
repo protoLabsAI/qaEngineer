@@ -66,6 +66,17 @@ MAX_STRUCTURAL_UNAVAILABLE = 3  # rounds whose structural lane was out
 MAX_EXHAUSTIONS = 2  # rounds that never got a verdict
 MAX_PANEL_RETRIES = 4  # attempts that failed a lane and were retried
 
+# The DAILY share of structural-lane gaps (pr-reviewer-plugin#232). A structural pass that times out
+# or is cut short caps its round at WARN with `complete=false`; when that happens on most rounds of a
+# repo the gate is quietly WARN-by-default and every PR needs a manual stand-in review. The 6 h count
+# above sees a burst; this sees the slow bleed. Rounds that ran the structural lane are the
+# denominator; a gap is `structural_unavailable` (the lane was out) or `structural_partial` (it ran
+# but covered only N of M features). Over Aug-Oct 2026 an ordinary day sat at 0-11%; the incident
+# days were 17-62% (09-14 21%, 09-18 62%, 09-20 38%, 09-30 24%, 10-01 17%).
+STRUCTURAL_SHARE_HOURS = 24
+STRUCTURAL_SHARE_MIN_ROWS = 10  # below this a share is noise
+MAX_STRUCTURAL_GAP_SHARE = 0.15
+
 
 def _load_state(path: Path) -> dict:
     """Previous run's counters. A missing or corrupt file is not an error — it means
@@ -143,6 +154,62 @@ def window_health(rows: list[dict], *, now: float, hours: int = WINDOW_HOURS) ->
     return problems, summary
 
 
+def _ran_structural(row: dict) -> bool:
+    """Did this reviewed round run the structural lane? (The small-diff recipe has none.)"""
+    return bool(
+        "structural" in str(row.get("recipe") or "")
+        or "find_structural" in (row.get("step_s") or {})
+        or row.get("structural_unavailable")
+        or row.get("structural_partial")
+    )
+
+
+def structural_share_health(
+    rows: list[dict],
+    *,
+    now: float,
+    hours: int = STRUCTURAL_SHARE_HOURS,
+    max_share: float = MAX_STRUCTURAL_GAP_SHARE,
+) -> tuple[list[str], str]:
+    """(problems, summary) for the share of structural-lane gaps in the last ``hours``. Pure.
+
+    A partial pass carries ``structural_unavailable`` too (the lane is a gap either way), so the two
+    are split by ``structural_partial`` for the message: an outage and a capped/cut-short pass are
+    different fixes."""
+    since = now - hours * 3600
+    rounds = [
+        r
+        for r in rows
+        if r.get("event") == "reviewed"
+        and isinstance(r.get("ts"), (int, float))
+        and since <= r["ts"] <= now
+        and _ran_structural(r)
+    ]
+    gaps = [r for r in rounds if r.get("structural_unavailable") or r.get("structural_partial")]
+    partial = [r for r in gaps if r.get("structural_partial")]
+    share = len(gaps) / len(rounds) if rounds else 0.0
+    problems: list[str] = []
+    if len(rounds) >= STRUCTURAL_SHARE_MIN_ROWS and share > max_share:
+        reasons: dict[str, int] = {}
+        repos: dict[str, int] = {}
+        for r in gaps:
+            reason = str(r.get("structural_reason") or "?")
+            reasons[reason] = reasons.get(reason, 0) + 1
+            repo = str(r.get("repo") or "?").split("/")[-1]
+            repos[repo] = repos.get(repo, 0) + 1
+
+        def top(counts: dict[str, int]) -> str:
+            return ", ".join(f"{k}×{v}" for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:3])
+
+        problems.append(
+            f"structural lane short on {len(gaps)}/{len(rounds)} rounds in the last {hours}h "
+            f"({share:.0%} > {max_share:.0%}; {len(gaps) - len(partial)} unavailable, {len(partial)} partial): "
+            f"{top(reasons)} | {top(repos)}"
+        )
+    summary = f"structural{hours}h: rounds={len(rounds)} gaps={len(gaps)} partial={len(partial)} share={share:.0%}"
+    return problems, summary
+
+
 def _window_days(now: float, hours: int) -> list[str]:
     """The telemetry files a window can span — it rolls at midnight, so up to two days."""
     import datetime as _dt
@@ -163,6 +230,13 @@ def main() -> int:
     ap.add_argument("--min-completion", type=float, default=MIN_COMPLETION_RATE)
     ap.add_argument("--no-save", action="store_true", help="do not update the state file (dry run)")
     ap.add_argument("--window-hours", type=int, default=WINDOW_HOURS, help="recent-window length (0 disables)")
+    ap.add_argument(
+        "--max-structural-gap-share",
+        type=float,
+        default=MAX_STRUCTURAL_GAP_SHARE,
+        help="alarm when more than this share of the last 24h's structural rounds were unavailable or partial "
+        "(0 disables)",
+    )
     args = ap.parse_args()
 
     try:
@@ -210,17 +284,27 @@ def main() -> int:
 
     # The recent window: the one place a bad evening shows before the lifetime averages move.
     window_summary = ""
-    if args.window_hours > 0:
+    share_on = args.max_structural_gap_share > 0
+    if args.window_hours > 0 or share_on:
         import time as _time
 
         now = _time.time()
+        span = max(args.window_hours, STRUCTURAL_SHARE_HOURS if share_on else 0)
         try:
-            rows = telemetry_rows(args.container, _window_days(now, args.window_hours))
+            rows = telemetry_rows(args.container, _window_days(now, span))
         except Exception as exc:  # noqa: BLE001 — the eval report already answered; say so, don't fail
             notes.append(f"telemetry unreadable ({exc}) — recent-window checks skipped this run")
         else:
-            window_problems, window_summary = window_health(rows, now=now, hours=args.window_hours)
-            problems.extend(window_problems)
+            summaries = []
+            if args.window_hours > 0:
+                window_problems, text = window_health(rows, now=now, hours=args.window_hours)
+                problems.extend(window_problems)
+                summaries.append(text)
+            if share_on:
+                share_problems, text = structural_share_health(rows, now=now, max_share=args.max_structural_gap_share)
+                problems.extend(share_problems)
+                summaries.append(text)
+            window_summary = " ".join(summaries)
 
     if not prev:
         notes.append(f"first run (no state at {args.state}) — recording baselines; growth alarms arm next run")
