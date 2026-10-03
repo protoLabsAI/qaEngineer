@@ -202,6 +202,41 @@ class SupersedeTests(unittest.TestCase):
         self.assertEqual(actual, recorded)
 
 
+class GhTimeoutTests(unittest.TestCase):
+    """A hung `gh` is a failed API call, not a hung gate (pr-reviewer-plugin#254)."""
+
+    def test_a_hung_gh_call_times_out_as_a_failed_api_call(self):
+        seen = {}
+
+        def hung(cmd, **kwargs):
+            seen.update(kwargs)
+            raise rah.subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
+
+        with mock.patch.object(rah.subprocess, "run", hung):
+            with self.assertRaisesRegex(RuntimeError, "timed out"):
+                rah._gh("api", "repos/o/r/pulls/1/reviews")
+        self.assertEqual(seen["timeout"], rah.GH_TIMEOUT_S)
+        self.assertGreater(rah.GH_TIMEOUT_S, 0)
+
+    def test_a_timed_out_reviews_read_posts_no_status_and_still_exits_zero(self):
+        calls = []
+
+        def hung(cmd, **kwargs):
+            calls.append(cmd)
+            raise rah.subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
+
+        env = {"PR_NUMBER": "123", "HEAD_SHA": MERGED, "PR_LABELS": ""}
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, env), mock.patch.object(rah.subprocess, "run", hung):
+            os.environ.pop("DRY_RUN", None)
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(rah.main(), 0)
+        # Fail closed: the read failed, so no verdict was decided and no status was written.
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("statuses", " ".join(calls[0]))
+        self.assertIn("timed out", err.getvalue())
+
+
 class MainTests(unittest.TestCase):
     def _env(self, **extra):
         env = {"PR_NUMBER": "123", "HEAD_SHA": MERGED, "PR_LABELS": ""}
