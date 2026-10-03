@@ -193,7 +193,7 @@ class SupersedeTests(unittest.TestCase):
 
     def test_the_vendored_block_is_unedited(self):
         # Edit the rule in pr-reviewer-plugin and re-sync; never here.
-        text = Path(rah.__file__).read_text()
+        text = Path(rah.__file__).read_text(encoding="utf-8")
         begin = text.index("# ── BEGIN VENDORED SUPERSEDE RULE")
         end = text.index("\n", text.index("# ── END VENDORED SUPERSEDE RULE"))
         block = text[begin:end]
