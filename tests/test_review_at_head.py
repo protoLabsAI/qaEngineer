@@ -11,10 +11,15 @@ copy of this suite is pytest; the cases below are the same ones, restated.
 
 from __future__ import annotations
 
+import ast
+import base64
 import contextlib
+import hashlib
 import importlib.util
 import io
+import json
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -66,6 +71,135 @@ class DecideTests(unittest.TestCase):
         decision = rah.decide([review(MERGED, body=body)], MERGED, [])
         self.assertFalse(decision.ok)
         self.assertIn("carries no verdict", decision.description)
+
+
+HEAD = MERGED
+FILE = "src/engagement.rs"
+MAJOR = {
+    "file": FILE,
+    "line": 42,
+    "severity": "major",
+    "claim": "Unconditional Engaged exclusions silently alter legacy behaviour.",
+    "evidence": "if state == State::Engaged { return; }",
+    "verdict": "confirmed",
+}
+REFUTED = {"a": f"{FILE}:42", "d": "refuted", "e": True, "h": True}
+
+
+def token(record):
+    """The panel's `disp=` disposition record: unpadded base64url of compact JSON."""
+    raw = json.dumps(record, separators=(",", ":"), sort_keys=True).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def round_review(verdict, findings=(), *, id, record=None, complete=True, verified=True, promoted=False):
+    """A panel round as the plugin posts it: the marker, then the findings record."""
+    attrs = f"head={HEAD} verdict={verdict} promoted={'true' if promoted else 'false'}"
+    attrs += "" if complete else " complete=false"
+    attrs += "" if verified else " verified=false"
+    attrs += f" disp={token(record)}" if record else ""
+    body = (
+        f"<!-- protoagent-qa-review {attrs} -->\n## QA panel review — **{verdict}**\n\n"
+        "<details>\n<summary>findings JSON (machine-readable)</summary>\n\n"
+        f"```json\n{json.dumps(list(findings), indent=2)}\n```\n</details>"
+    )
+    return {"user": {"login": rah.REVIEWER_LOGIN}, "body": body, "id": id}
+
+
+def r1():
+    return round_review("PASS", id=101)
+
+
+def r2():
+    return round_review("FAIL", [MAJOR], id=102)
+
+
+def refuting(of=102, **row):
+    return {"of": of, "rows": [{**REFUTED, **row}]}
+
+
+def _canonical(node):
+    """Mirror of pr-reviewer-plugin `scripts/vendor_supersede_rule.py::canonical`."""
+    if isinstance(node, list):
+        return "[" + ",".join(
+            _canonical(n)
+            for n in node
+            if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str))
+        ) + "]"
+    if isinstance(node, ast.AST):
+        fields = [
+            f"{name}={_canonical(getattr(node, name, None))}"
+            for name in node._fields
+            if getattr(node, name, None) not in (None, [])
+        ]
+        return f"{type(node).__name__}(" + ",".join(fields) + ")"
+    return repr(node)
+
+
+class SupersedeTests(unittest.TestCase):
+    """Strictest round per head, except a FAIL a later round SUPERSEDES — the rule vendored
+    from pr-reviewer-plugin#234, the same answer that repo's `QA panel` gate gives."""
+
+    def decide(self, reviews):
+        return rah.decide(reviews, HEAD, [])
+
+    def test_a_round_that_refutes_every_blocking_finding_with_evidence_supersedes_the_fail(self):
+        # mythxengine-sdk#409: r1 PASS, r2 FAIL with one major, r3 on the SAME head refutes it.
+        decision = self.decide([r1(), r2(), round_review("PASS", id=103, record=refuting())])
+        self.assertTrue(decision.ok)
+        self.assertIn("refuted with evidence", decision.description)
+
+    def test_the_fail_stands_unless_every_condition_holds(self):
+        cases = {
+            "open": round_review("PASS", id=103, record=refuting(d="open")),
+            "fixed-on-an-unchanged-head": round_review("PASS", id=103, record=refuting(d="fixed")),
+            "unaccounted": round_review("PASS", id=103, record={"of": 102, "rows": []}),
+            "no-evidence": round_review("PASS", id=103, record=refuting(e=False)),
+            "not-honoured": round_review("PASS", id=103, record=refuting(h=False)),
+            "incomplete": round_review("PASS", id=103, record=refuting(), complete=False),
+            "unverified": round_review("PASS", id=103, record=refuting(), verified=False),
+            "no-record": round_review("PASS", id=103),
+            "still-carried": round_review("PASS", [{**MAJOR, "carried": True}], id=103, record=refuting()),
+        }
+        for name, newer in cases.items():
+            with self.subTest(name):
+                decision = self.decide([r1(), r2(), newer])
+                self.assertFalse(decision.ok)
+                self.assertIn("FAIL", decision.description)
+
+    def test_two_racing_rounds_on_one_head_settle_strictest(self):
+        # pr-reviewer-plugin#89: both started from r1, so neither names the other.
+        racer = round_review("PASS", id=103, record=refuting(of=101))
+        for reviews in ([r1(), r2(), racer], [r1(), racer, r2()]):
+            self.assertFalse(self.decide(reviews).ok)
+
+    def test_the_strictest_round_wins_not_the_latest(self):
+        # The old reading: after a FAIL, a re-review PASS turned this check green while the
+        # plugin's `QA panel` stayed red.
+        self.assertFalse(self.decide([r2(), round_review("PASS", id=103)]).ok)
+
+    def test_a_promotion_speaks_only_for_a_head_with_no_round(self):
+        promotion = round_review("PASS", id=104, promoted=True)
+        self.assertTrue(self.decide([promotion]).ok)
+        self.assertFalse(self.decide([r2(), promotion]).ok)
+
+    def test_a_rule_that_raises_supersedes_nothing(self):
+        def boom(_rounds):
+            raise RuntimeError("rule broke")
+
+        reviews = [r1(), r2(), round_review("PASS", id=103, record=refuting())]
+        with mock.patch.object(rah, "_v_superseded_fails", boom), contextlib.redirect_stderr(io.StringIO()):
+            self.assertFalse(self.decide(reviews).ok)
+
+    def test_the_vendored_block_is_unedited(self):
+        # Edit the rule in pr-reviewer-plugin and re-sync; never here.
+        text = Path(rah.__file__).read_text()
+        begin = text.index("# ── BEGIN VENDORED SUPERSEDE RULE")
+        end = text.index("\n", text.index("# ── END VENDORED SUPERSEDE RULE"))
+        block = text[begin:end]
+        recorded = re.search(r"block-ast-sha256:\s*(\S+)", block).group(1)
+        actual = hashlib.sha256(_canonical(ast.parse(block).body).encode()).hexdigest()
+        self.assertEqual(actual, recorded)
 
 
 class MainTests(unittest.TestCase):
