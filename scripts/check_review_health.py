@@ -117,7 +117,10 @@ def window_health(rows: list[dict], *, now: float, hours: int = WINDOW_HOURS) ->
     recent = [r for r in rows if isinstance(r.get("ts"), (int, float)) and r["ts"] >= since]
     reviewed = [r for r in recent if r.get("event") == "reviewed"]
     incomplete = [r for r in reviewed if not r.get("complete", True)]
-    structural = [r for r in reviewed if r.get("structural_unavailable")]
+    # Outages only: a pass the feature cap or budget cut short ran and kept its findings — counting it
+    # here is how cap partials got read as protoPatch being down (pr-reviewer-plugin#274). Rows
+    # written before #274 carry `structural_unavailable` on partials too, so exclude by `structural_partial`.
+    structural = [r for r in reviewed if r.get("structural_unavailable") and not r.get("structural_partial")]
     exhaustions = [r for r in recent if r.get("event") == "exhaustion"]
     retries = [r for r in recent if r.get("event") == "panel_retry"]
     problems: list[str] = []
@@ -128,7 +131,7 @@ def window_health(rows: list[dict], *, now: float, hours: int = WINDOW_HOURS) ->
             for r in incomplete:
                 for lane in (r.get("incomplete_finders") or []) + (r.get("degraded") or []):
                     lanes[str(lane)] = lanes.get(str(lane), 0) + 1
-                if r.get("structural_unavailable"):
+                if r.get("structural_unavailable") or r.get("structural_partial"):
                     lanes["find_structural"] = lanes.get("find_structural", 0) + 1
             worst = ", ".join(f"{k}×{v}" for k, v in sorted(lanes.items(), key=lambda kv: -kv[1])[:3])
             problems.append(
@@ -173,8 +176,9 @@ def structural_share_health(
 ) -> tuple[list[str], str]:
     """(problems, summary) for the share of structural-lane gaps in the last ``hours``. Pure.
 
-    A partial pass carries ``structural_unavailable`` too (the lane is a gap either way), so the two
-    are split by ``structural_partial`` for the message: an outage and a capped/cut-short pass are
+    A gap is either flag. Since pr-reviewer-plugin#274 a partial pass carries only
+    ``structural_partial``; rows written before it carry ``structural_unavailable`` too. The two are
+    split by ``structural_partial`` for the message: an outage and a capped/cut-short pass are
     different fixes."""
     since = now - hours * 3600
     rounds = [

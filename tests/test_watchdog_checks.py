@@ -248,6 +248,23 @@ class RecentWindow(unittest.TestCase):
         self.assertIn("structural lane unavailable on 4 rounds", problems[0])
         self.assertIn("exit-4:gateway-timeout", problems[0])
 
+    def test_a_cut_short_pass_is_not_a_structural_outage(self):
+        # pr-reviewer-plugin#274: a feature-cap partial ran and kept its findings. Both row shapes —
+        # before #274 (both flags) and after (`structural_partial` alone) — stay out of the outage count.
+        legacy = dict(structural_unavailable=True, structural_partial=True, structural_reason="feature-cap")
+        current = dict(structural_partial=True, structural_reason="feature-cap")
+        rows = [{**reviewed(10 * i, complete=False), **(legacy if i % 2 else current)} for i in range(1, 6)]
+        rows += [reviewed(500 + i) for i in range(10)]
+        problems, summary = window_health(rows, now=NOW)
+        self.assertEqual(problems, [])
+        self.assertIn("incomplete=5 structural_out=0", summary)
+
+    def test_a_cut_short_pass_still_names_its_lane_when_the_rate_trips(self):
+        rows = [{**reviewed(10 * i, complete=False), "structural_partial": True} for i in range(1, 6)]
+        problems, _ = window_health(rows, now=NOW)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("find_structural×5", problems[0])
+
     def test_exhaustions_and_retries_are_counted_from_their_own_events(self):
         rows = [{"event": "exhaustion", "ts": NOW - 100 * i, "repo": "o/terminal-plugin", "pr": 10} for i in range(3)]
         rows += [{"event": "panel_retry", "ts": NOW - 50 * i, "repo": "o/r", "pr": i, "failed": ["verify"]} for i in range(5)]
@@ -270,10 +287,11 @@ def structural_round(ts_ago_s, *, repo="o/protoAgent", out=False, partial=False,
         "recipe": "code-review-structural",
         "step_s": {"find_structural": 900.0},
     }
-    if out or partial:
+    if out:
         row.update(structural_unavailable=True, structural_reason=reason, complete=False)
     if partial:
-        row["structural_partial"] = True
+        # The row shape since pr-reviewer-plugin#274: a partial no longer also says "unavailable".
+        row.update(structural_partial=True, structural_reason=reason, complete=False)
     return row
 
 
