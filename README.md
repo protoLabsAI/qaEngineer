@@ -15,7 +15,7 @@ python -m server plugin install https://github.com/protoLabsAI/qaEngineer
 |---|---|---|
 | `workflows` (builtin) | core | the recipe engine the review panels run on |
 | [github-plugin](https://github.com/protoLabsAI/github-plugin) | v0.9.0 | the verdict surface — formal Review API tools with CI-terminal + self-review guards inside the tools |
-| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.60.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
+| [pr-reviewer-plugin](https://github.com/protoLabsAI/pr-reviewer-plugin) | v0.61.0 | the machinery — webhook chokepoint, structural trigger, panel dispatch, evidence grounding, convergence, approve-on-green sweep, the `QA panel` check run, on-demand summon, telemetry + eval |
 
 Persona: [`SOUL.md`](./SOUL.md) (Vera — verdict system, three-layer verification, 80% bar,
 self-restriction), also inlined in the manifest's `archetype.soul` so the new-agent picker
@@ -248,7 +248,11 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > and `pr_reviewer.time_budget_s: 900` (2026-09-26, up
 > from 300 — the structural lane derives clawpatch's per-request gateway timeout from it, and
 > 270 s lost the whole pass on 10 of 90 rounds over large diffs; pr-reviewer-plugin#205).
-> The seed carries the same three values since 2026-09-26, so a fresh instance boots with
+> **2026-10-19, for a 32-feature structural pass:** `pr_reviewer.structural_max_features: 32`
+> (plugin default 16), `time_budget_s: 3000` (from 1500), `finder_timeout_s: 3150` and
+> `panel_attempt_timeout: 4050` — the arithmetic is in the seed's comment; 4050 needs
+> pr-reviewer >= v0.61.0, whose attempt ceiling is 4200 s (3000 before).
+> The seed carries the same values, so a fresh instance boots with
 > them; keep the two in step when either changes. A config
 > POST makes the host **reload every plugin without stopping the running sweep** —
 > before pr-reviewer v0.49.0 that left two dispatchers alive and the sweep backfilling
