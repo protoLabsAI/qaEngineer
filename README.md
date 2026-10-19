@@ -249,7 +249,7 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > from 300 — the structural lane derives clawpatch's per-request gateway timeout from it, and
 > 270 s lost the whole pass on 10 of 90 rounds over large diffs; pr-reviewer-plugin#205).
 > **2026-10-19, for a 32-feature structural pass:** `pr_reviewer.structural_max_features: 32`
-> (plugin default 16), `time_budget_s: 3000` (from 1500), `finder_timeout_s: 3150` and
+> (plugin default 16), `time_budget_s: 3000` (from 1500 live — the seed still said 900), `finder_timeout_s: 3150` and
 > `panel_attempt_timeout: 4050` — the arithmetic is in the seed's comment; 4050 needs
 > pr-reviewer >= v0.61.0, whose attempt ceiling is 4200 s (3000 before).
 > The seed carries the same values, so a fresh instance boots with

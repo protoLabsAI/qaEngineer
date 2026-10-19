@@ -85,7 +85,7 @@ pr_reviewer:
   # coverage:
   #   structural_max_features 32  (default 16; epic-sized PRs — protoAgent#4345–#4359, 25–55
   #                                features each — were 9 of 12 structural gaps in one day at 16)
-  #   time_budget_s         3000  (default 600; was 1500 at cap 16). Sized from 86 recent protoAgent
+  #   time_budget_s         3000  (default 600; 1500 live at cap 16, 900 here). From 86 protoAgent
   #                                passes at structural_jobs 4: ~353 s per feature slot at p90
   #                                (~239 s p50), and 32 features / 4 jobs = 8 slots ≈ 2824 s p90
   #                                (~1910 s p50). 3000 = 375 s/slot, the same per-slot allowance
