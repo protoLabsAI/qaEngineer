@@ -18,7 +18,7 @@ USER root
 # pr-reviewer plugin shells out to. The base (bookworm) ships node 18 at best;
 # clawpatch needs >=22, so use nodesource. Pin the CLI so image builds are
 # reproducible; bump deliberately.
-ARG PROTOPATCH_VERSION=0.8.2
+ARG PROTOPATCH_VERSION=0.8.3
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
@@ -32,7 +32,7 @@ ARG GITHUB_PLUGIN_REF=v0.9.0
 RUN git clone --depth 1 --branch "${GITHUB_PLUGIN_REF}" \
       https://github.com/protoLabsAI/github-plugin.git /opt/protoagent/plugins/github \
     && rm -rf /opt/protoagent/plugins/github/.git
-ARG PR_REVIEWER_PLUGIN_REF=v0.63.0
+ARG PR_REVIEWER_PLUGIN_REF=v0.64.0
 RUN git clone --depth 1 --branch "${PR_REVIEWER_PLUGIN_REF}" \
       https://github.com/protoLabsAI/pr-reviewer-plugin.git /opt/protoagent/plugins/pr-reviewer \
     && rm -rf /opt/protoagent/plugins/pr-reviewer/.git
