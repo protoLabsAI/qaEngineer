@@ -102,9 +102,20 @@ pr_reviewer:
   #                                verify was cut off. The plugin's hard ceiling is 4200 since
   #                                pr-reviewer v0.61.0 (3000 before); above it is clamped. The
   #                                derived round bound is (1+1)×4050+600 = 8700 s, under 9000)
+  #   max_concurrent_panels 4     (manifest default 3; raised 2026-11-08). 10-31 → 11-08: 395
+  #                                panels plus 78 superseded ones, bursts to 93/day, queue max
+  #                                ~54 min. At Vera's peak both smart replicas ran 5–12 requests
+  #                                with Waiting 0 and ≤25 % KV cache, and total generation still
+  #                                rose with concurrency. Per-panel cost of a 4th: the lightest
+  #                                finder p50 120 s at 1 panel, 156 s at 2, 192 s at 3 (≈+19 %
+  #                                at 4) for ~+12 % throughput and ~half the mean burst wait.
+  #                                Watch reviewed p90 latency and `complete` after the change;
+  #                                back to 3 if finders start reaching finder_timeout_s.
+  #                                Read at registration: a restart applies it, not a config POST.
   # Seed-once: this does NOT reach the running Vera — change hers via
   # POST /api/config {"config": {"pr_reviewer": {...}}} and keep the two in step.
   structural_max_features: 32
+  max_concurrent_panels: 4
   finder_timeout_s: 3150
   panel_attempt_timeout: 4050
   time_budget_s: 3000
