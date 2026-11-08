@@ -80,6 +80,18 @@ pr_reviewer:
   shadow_mode: false
   promotion_owner: true
   default_repo: ""
+  # #318 (2026-11-08): the board's review gate (same review-finder panel, frontier model) caught
+  # 16 real defects in a 24-finding sample of board PRs; this panel raised 1 of them in full.
+  # (1) The correctness and removed-behavior lanes run on Claude Sonnet through the Claude
+  #     subscription (CLAUDE_CODE_OAUTH_TOKEN, hydrated from Infisical). With no readable token,
+  #     or for 30 min after the lane fails on it, they run on the default model.
+  deep_finder_model: "anthropic-oauth:claude-sonnet-5-5"
+  # (2) A board PR (labelled by projectBoard-plugin >= v0.78.0) is the board gate's to review:
+  #     its green `board/review-gate` at the head is posted as an attested PASS, no panel. A
+  #     pending/failed gate is held (never a FAIL, which the board would read back as ours). A
+  #     head the gate never posted on within 20 min, or a pending older than 1 h, gets our panel.
+  reviewers_of_record:
+    - { label: "reviewer-of-record:board", status: "board/review-gate", name: "project board" }
   # Panel budgets — the values the running volume carries (raised 2026-10-19 for a 32-feature
   # structural pass), so a FRESH instance does not boot on plugin defaults that measurably lost
   # coverage:
