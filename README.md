@@ -252,6 +252,10 @@ Secrets (all env, Infisical): `OPENAI_API_KEY`, `A2A_AUTH_TOKEN` (`VERA_API_KEY`
 > (plugin default 16), `time_budget_s: 3000` (from 1500 live — the seed still said 900), `finder_timeout_s: 3150` and
 > `panel_attempt_timeout: 4050` — the arithmetic is in the seed's comment; 4050 needs
 > pr-reviewer >= v0.61.0, whose attempt ceiling is 4200 s (3000 before).
+> **2026-11-09, after the Sonnet deep lanes (pr-reviewer#318):** `verify_timeout_s: 450` (recipe
+> default 300; ~2.4× the findings meant 7 verify timeouts in 53 reviews) and
+> `panel_attempt_timeout: 4200`, the ceiling, so the tail still fits one attempt
+> (3150 + 300 + 450 + 300).
 > The seed carries the same values, so a fresh instance boots with
 > them; keep the two in step when either changes. A config
 > POST makes the host **reload every plugin without stopping the running sweep** —
