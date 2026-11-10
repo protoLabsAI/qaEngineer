@@ -77,6 +77,14 @@ STRUCTURAL_SHARE_HOURS = 24
 STRUCTURAL_SHARE_MIN_ROWS = 10  # below this a share is noise
 MAX_STRUCTURAL_GAP_SHARE = 0.15
 
+# The deep lanes (pr-reviewer-plugin#318). With `pr_reviewer.deep_finder_model` set, the correctness
+# and removed-behavior lanes run on a frontier model through a subscription. When that model is
+# rate-limited or its token is lost, the plugin's breaker sends those lanes back to the local model
+# and the round still completes — so every other number here stays green while recall drops to what
+# #318 measured. A `reviewed` row records the model its round used (`deep_model`, absent on the
+# default); one transient trip costs a round or two, a spent quota costs every round.
+MAX_DEEP_FALLBACK_ROUNDS = 2
+
 
 def _load_state(path: Path) -> dict:
     """Previous run's counters. A missing or corrupt file is not an error — it means
@@ -214,6 +222,34 @@ def structural_share_health(
     return problems, summary
 
 
+def deep_lane_health(
+    rows: list[dict], *, configured: str, now: float, hours: int = WINDOW_HOURS
+) -> tuple[list[str], str]:
+    """(problems, summary) for rounds whose deep lanes ran on the default model although
+    ``configured`` names one. Pure. With nothing configured there is nothing to fall back from."""
+    if not (configured or "").strip():
+        return [], ""
+    since = now - hours * 3600
+    recent = [r for r in rows if isinstance(r.get("ts"), (int, float)) and since <= r["ts"] <= now]
+    reviewed = [r for r in recent if r.get("event") == "reviewed"]
+    fell_back = [r for r in reviewed if not r.get("deep_model")]
+    problems: list[str] = []
+    if len(fell_back) > MAX_DEEP_FALLBACK_ROUNDS:
+        whys = sorted(
+            {
+                str(r.get("why") or "?")
+                for r in recent
+                if r.get("event") == "deep_lane" and str(r.get("model") or "default") == "default"
+            }
+        )
+        problems.append(
+            f"deep lanes ran on the default model in {len(fell_back)}/{len(reviewed)} rounds in the last {hours}h "
+            f"(allowed {MAX_DEEP_FALLBACK_ROUNDS}) though deep_finder_model={configured}"
+            f"{': ' + ', '.join(whys) if whys else ''}"
+        )
+    return problems, f"deep{hours}h: fell_back={len(fell_back)}/{len(reviewed)}"
+
+
 def _window_days(now: float, hours: int) -> list[str]:
     """The telemetry files a window can span — it rolls at midnight, so up to two days."""
     import datetime as _dt
@@ -304,6 +340,17 @@ def main() -> int:
                 window_problems, text = window_health(rows, now=now, hours=args.window_hours)
                 problems.extend(window_problems)
                 summaries.append(text)
+                try:
+                    live = operator_api_get(args.container, "/api/config")
+                    live = live.get("config", live)
+                    deep_model = str((live.get("pr_reviewer") or {}).get("deep_finder_model") or "")
+                except Exception as exc:  # noqa: BLE001 — same soft degrade as the telemetry read
+                    notes.append(f"live config unreadable ({exc}) — deep-lane check skipped this run")
+                else:
+                    deep_problems, text = deep_lane_health(rows, configured=deep_model, now=now, hours=args.window_hours)
+                    problems.extend(deep_problems)
+                    if text:
+                        summaries.append(text)
             if share_on:
                 share_problems, text = structural_share_health(rows, now=now, max_share=args.max_structural_gap_share)
                 problems.extend(share_problems)
