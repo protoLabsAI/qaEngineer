@@ -202,7 +202,7 @@ class OAuthHealth(unittest.TestCase):
 
 
 
-from check_review_health import structural_share_health, window_health  # noqa: E402
+from check_review_health import deep_lane_health, structural_share_health, window_health  # noqa: E402
 from smoke_replay import evaluate as smoke_evaluate  # noqa: E402
 
 NOW = 1_790_400_000.0
@@ -276,6 +276,40 @@ class RecentWindow(unittest.TestCase):
     def test_rows_outside_the_window_do_not_count(self):
         rows = [reviewed(7 * 3600, complete=False, structural=True) for _ in range(10)]
         self.assertEqual(window_health(rows, now=NOW, hours=6), ([], "window6h: reviewed=0 incomplete=0 structural_out=0 exhaustions=0 retries=0"))
+
+
+class DeepLaneFallback(unittest.TestCase):
+    """The rule: a configured deep model that the rounds did not use is an alarm, not a detail."""
+
+    SONNET = "anthropic-oauth:claude-sonnet-5-5"
+
+    def rounds(self, on_model, on_default):
+        rows = [{**reviewed(60 * i), "deep_model": self.SONNET} for i in range(1, on_model + 1)]
+        return rows + [{**reviewed(60 * i + 30), "deep_model": None} for i in range(1, on_default + 1)]
+
+    def test_all_rounds_on_the_configured_model_is_healthy(self):
+        problems, summary = deep_lane_health(self.rounds(6, 0), configured=self.SONNET, now=NOW)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary, "deep6h: fell_back=0/6")
+
+    def test_a_transient_trip_is_tolerated(self):
+        self.assertEqual(deep_lane_health(self.rounds(6, 2), configured=self.SONNET, now=NOW)[0], [])
+
+    def test_sustained_fallback_alarms_with_the_breaker_reason(self):
+        rows = self.rounds(1, 4) + [
+            {"event": "deep_lane", "ts": NOW - 100, "decision": "model", "model": "default", "why": "breaker-open:rate-limit"}
+        ]
+        problems, _ = deep_lane_health(rows, configured=self.SONNET, now=NOW)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("4/5 rounds", problems[0])
+        self.assertIn("breaker-open:rate-limit", problems[0])
+
+    def test_nothing_configured_is_never_an_alarm(self):
+        self.assertEqual(deep_lane_health(self.rounds(0, 9), configured="", now=NOW), ([], ""))
+
+    def test_rounds_outside_the_window_do_not_count(self):
+        rows = [{**reviewed(7 * 3600 + i), "deep_model": None} for i in range(5)]
+        self.assertEqual(deep_lane_health(rows, configured=self.SONNET, now=NOW)[0], [])
 
 
 def structural_round(ts_ago_s, *, repo="o/protoAgent", out=False, partial=False, reason=None):
