@@ -69,7 +69,7 @@ jobs:
     # required-check context would then be ambiguous between a check-run that only says "the
     # job executed" and the status that carries the actual answer. One name, one meaning.
     name: Assert a panel verdict at head
-    runs-on: ubuntu-latest # workspace-config: allow-hosted-runner public repo — GH-hosted is free
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
