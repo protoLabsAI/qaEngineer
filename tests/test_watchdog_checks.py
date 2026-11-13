@@ -418,11 +418,22 @@ class SmokeEvaluate(unittest.TestCase):
         self.assertIn("structural=138s", summary)
 
     def test_merged_head_shape_is_refused_on_the_lane_floor(self):
-        fast = {**REAL_PANEL, **{s: 5.0 for s in ("find_correctness", "find_crossfile", "find_conventions")}}
+        # The trap: every LLM finder returns in seconds because the head has nothing to review.
+        lanes = ("find_correctness", "find_removed_behavior", "find_crossfile", "find_conventions")
+        fast = {**REAL_PANEL, **{s: 5.0 for s in lanes}}
         problems, _ = smoke_evaluate(replay(fast))
         self.assertEqual(len(problems), 1)
         self.assertIn("merged-head trap", problems[0])
         self.assertIn("find_correctness=5s", problems[0])
+
+    def test_one_quick_lane_next_to_real_ones_is_not_the_trap(self):
+        # protoAgent#5208, 2026-11-13: an additive diff gave the removed-behavior lane little to do.
+        quick = {**REAL_PANEL, "find_removed_behavior": 28.0}
+        self.assertEqual(smoke_evaluate(replay(quick))[0], [])
+
+    def test_a_fast_structural_lane_alone_is_not_the_trap(self):
+        # a small diff, or every feature served from the result cache (pr-reviewer v0.72.0)
+        self.assertEqual(smoke_evaluate(replay({**REAL_PANEL, "find_structural": 6.0}))[0], [])
 
     def test_empty_diff_failed_and_missing_steps_are_each_named(self):
         partial = {k: v for k, v in REAL_PANEL.items() if k != "verify"}
