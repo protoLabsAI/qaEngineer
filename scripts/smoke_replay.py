@@ -9,7 +9,7 @@ four minutes earlier: the merged-PR trap (pr-reviewer-plugin#84) is a replay tha
 back PASS / 0 findings in seconds because the head yields nothing to review, which is
 exactly the wrong bug for a post-upgrade check to have. So this script (a) picks an OPEN
 PR and re-checks it is still open afterwards, and (b) refuses to believe a result whose
-finder lanes finished suspiciously fast.
+LLM finder lanes ALL finished suspiciously fast.
 
     python3 scripts/smoke_replay.py --container vera                   # picks a PR
     python3 scripts/smoke_replay.py --repo protoLabsAI/protoAgent --pr 3626
@@ -28,11 +28,16 @@ import sys
 
 from vera_api import operator_api_post
 
-FINDER_STEPS = ("find_correctness", "find_removed_behavior", "find_crossfile", "find_conventions", "find_structural")
+LLM_FINDER_STEPS = ("find_correctness", "find_removed_behavior", "find_crossfile", "find_conventions")
+FINDER_STEPS = LLM_FINDER_STEPS + ("find_structural",)
 PANEL_STEPS = FINDER_STEPS + ("synthesize", "verify", "report")
 # A real finder pass over a real diff takes minutes; the merged-head shape came back in
-# 4–7 s per lane (memory of the 2026-08-22 incident). 30 s is far under the slowest honest
-# lane seen (162 s on an 8-file PR) and far over the trap.
+# 4–7 s on EVERY lane (the 2026-08-22 incident). So the floor is on the SLOWEST LLM finder: 30 s
+# is far under the slowest honest lane seen (162 s on an 8-file PR) and far over the trap. One
+# quick lane is not the trap — `find_removed_behavior` has little to do on an additive diff (28 s
+# on protoAgent#5208, 2026-11-13, next to a 510 s structural lane), and `find_structural` is
+# legitimately seconds on a small diff or when its features come from the result cache
+# (pr-reviewer v0.72.0), so it is not part of the floor at all.
 MIN_FINDER_S = 30.0
 # Pick a PR big enough that the lanes have something to do and small enough to finish.
 MIN_LINES, MAX_LINES = 20, 1500
@@ -43,7 +48,7 @@ def evaluate(result: dict, *, min_finder_s: float = MIN_FINDER_S) -> tuple[list[
     """(problems, one-line summary) for a replay response. Pure, so the rule is testable.
 
     Fails on: no run; `empty_diff`; any `failed_steps`; a panel step missing from
-    `step_seconds`; a finder lane under the floor. `degraded_steps` is reported, not failed
+    `step_seconds`; EVERY LLM finder lane under the floor. `degraded_steps` is reported, not failed
     — a lane the plugin degraded on purpose (context overrun) is the machinery working.
     """
     runs = result.get("runs") if isinstance(result, dict) else None
@@ -61,9 +66,10 @@ def evaluate(result: dict, *, min_finder_s: float = MIN_FINDER_S) -> tuple[list[
     missing = [s for s in PANEL_STEPS if s not in seconds]
     if missing:
         problems.append(f"steps that never ran: {', '.join(missing)}")
-    fast = [f"{s}={seconds[s]:.0f}s" for s in FINDER_STEPS if s in seconds and float(seconds[s]) < min_finder_s]
-    if fast:
-        problems.append(f"finder lane(s) under the {min_finder_s:.0f}s floor (merged-head trap?): {', '.join(fast)}")
+    llm = {s: float(seconds[s]) for s in LLM_FINDER_STEPS if s in seconds}
+    if llm and max(llm.values()) < min_finder_s:
+        lanes = ", ".join(f"{s}={t:.0f}s" for s, t in llm.items())
+        problems.append(f"every LLM finder lane under the {min_finder_s:.0f}s floor (merged-head trap?): {lanes}")
     verdict = run.get("verdict")
     findings = run.get("findings") or []
     degraded = list(tel.get("degraded_steps") or [])
@@ -150,8 +156,12 @@ def main() -> int:
     problems, summary = evaluate(result, min_finder_s=args.min_finder_s)
     try:
         state_after, head_after = pr_state(repo, pr)
-        if state_after != "OPEN" or head_after != head:
-            problems.append(f"PR changed during the replay (state={state_after}, head={head_after[:12]}) — rerun")
+        if state_after != "OPEN":
+            problems.append(f"PR is {state_after} after the replay (head={head_after[:12]}) — rerun on an open PR")
+        elif head_after != head:
+            # A push while the panel ran: the replay still reviewed the head it was given, which is
+            # all a machinery smoke needs. On a busy repo this fired on healthy panels every time.
+            print(f"note: {repo}#{pr} got a new head during the replay ({head_after[:12]}); the result is for {head[:12]}")
     except Exception as exc:  # noqa: BLE001
         print(f"note: could not re-check PR state after the replay ({exc})")
     if problems:
